@@ -1,0 +1,76 @@
+<div class="tiki-minibar-wrapper">
+    <div class="tiki-group">
+        <div class="tiki-set">
+            <h3 class="tiki-set-header">Server render time</h3>
+            <p>{{ tiki.total_time.duration|floatformat:0 }}<span class="tiki-qualifier">ms</span></p>
+        </div>
+        <div class="tiki-set">
+            <h3 class="tiki-set-header">Time in queries</h3>
+            <p>{{ tiki.sum_sql|floatformat:2 }}<span class="tiki-qualifier">ms / </span>57</p>
+        </div>
+        <div class="tiki-set">
+            <h3 class="tiki-set-header">Templates</h3>
+            <p>{{ tiki.templates|length }}</p>
+        </div>
+        <div class="tiki-set">
+            <h3 class="tiki-set-header">Log lines</h3>
+            <p>{{ tiki.loglines|length }}</p>
+        </div>
+        <div class="tiki-set">
+            <h3 class="tiki-set-header">Analytics</h3>
+            <p>{{ tiki.analytics|length }}</p>
+        </div>
+    </div>
+
+    {% if tiki.view or tiki.templates %}
+        <h3>Templates</h3>
+
+        {% if tiki.view %}
+            <p>Python view <strong>{{ tiki.view }}</strong> in <a href="https://github.com/eventbrite/core/blob/{{ tiki.release_hash }}/{{ tiki.view_filepath }}" class="tiki-request">{{ tiki.view_filepath_with_slashes|safe }}</a></p>
+        {% endif %}
+
+        <ul>
+        {% for template in tiki.templates %}
+            <li class="tiki-request">{{ template.timing.duration|floatformat:2 }}<strong class="tiki-qualifier">ms</strong> <a href="https://github.com/eventbrite/core/blob/{{ tiki.release_hash }}/{{ template.filepath }}">{{ template.filepath_with_slashes|safe }}</a></li>
+        {% endfor %}
+        </ul>
+    {% endif %}
+
+    <h3>Log Lines</h3>
+    <ul>
+    {% for log in tiki.loglines %}
+        <li class="tiki-pair"><em>{{ log.0 }}</em> {{ log.1 }}</li>
+    {% endfor %}
+    </ul>
+
+    <h2>Analytics Actions</h2>
+    <ul>
+    {% for action in tiki.analytics %}
+        <li class="tiki-pair"><em>{{ action.0 }}</em> {{ action.1 |linebreaks }}</li>
+    {% endfor %}
+    </ul>
+
+    <table cellspacing="0">
+        <thead>
+            <tr>
+                <th>Timing</th>
+                <th class="tiki-sql">Query</th>
+                <th class="tiki-timing-graph">Load</th>
+                <th class="tiki-type">Type</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for query in tiki.queries %}
+            <tr>
+                <td>{{ query.timing.duration|floatformat:2 }}<span class="tiki-qualifier">ms</span></td>
+                <td class="tiki-sql" style="border-color: #{{ query.color }};">{{ query.sql|safe }}</td>
+                <td class="tiki-timing-graph">
+                    <div class="tiki-empty-graph" style="width: {{ query.bar.left }}%;"></div>
+                    <div class="tiki-full-graph tiki-{% if query.type == "adb" %}adb{% else %}django{% endif %}" style="width: {{ query.bar.width }}%;"></div>
+                </td>
+                <td class="tiki-type">{{ query.type }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>

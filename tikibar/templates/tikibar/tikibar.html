@@ -1,0 +1,854 @@
+<!doctype html>
+<head>
+<title>Tikibar: {{ tiki.request_path }}</title>
+<script src="https://code.jquery.com/jquery-1.11.1.min.js"></script>
+<script>
+/*
+ * jQuery throttle / debounce - v1.1 - 3/7/2010
+ * http://benalman.com/projects/jquery-throttle-debounce-plugin/
+ *
+ * Copyright (c) 2010 "Cowboy" Ben Alman
+ * Dual licensed under the MIT and GPL licenses.
+ * http://benalman.com/about/license/
+ */
+(function(b,c){var $=b.jQuery||b.Cowboy||(b.Cowboy={}),a;$.throttle=a=function(e,f,j,i){var h,d=0;if(typeof f!=="boolean"){i=j;j=f;f=c}function g(){var o=this,m=+new Date()-d,n=arguments;function l(){d=+new Date();j.apply(o,n)}function k(){h=c}if(i&&!h){l()}h&&clearTimeout(h);if(i===c&&m>e){l()}else{if(f!==true){h=setTimeout(i?k:l,i===c?e-m:e)}}}if($.guid){g.guid=j.guid=j.guid||$.guid++}return g};$.debounce=function(d,e,f){return f===c?a(d,e,false):a(d,f,e!==false)}})(this);
+</script>
+<script>
+
+
+function addClientsideProfiling(timing) {
+    var events = collectClientsidePerformanceData(timing);
+    /*
+    <table cellspacing="0">
+        <thead>
+            <tr>
+                <th>Timing</th>
+                <th class="tiki-sql">Query</th>
+                <th class="tiki-timing-graph">Load</th>
+                <th class="tiki-type">Type</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for query in tiki.queries %}
+            <tr>
+                <td>{{ query.timing.duration|floatformat:2 }}<span class="tiki-qualifier">ms</span></td>
+                <td class="tiki-sql" style="border-color: #{{ query.color }};">{{ query.sql|safe }}</td>
+                <td class="tiki-timing-graph">
+                    <div class="tiki-empty-graph" style="width: {{ query.bar.left }}%;"></div>
+                    <div class="tiki-full-graph tiki-{% if query.type == "adb" %}adb{% else %}django{% endif %}" style="width: {{ query.bar.width }}%;"></div>
+                </td>
+                <td class="tiki-type">{{ query.type }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+     </table>
+    */
+    var table = $('<table cellspacing="0"><thead><tr><th>Start/Duration</th><th>Event</th><th>Load</th></tr></thead><tbody></tbody></table>');
+    var tbody = table.find('tbody:first');
+    jQuery.each(events, function(i, event) {
+        var tr = $('<tr><td></td><td></td><td class="tiki-timing-graph"><div class="tiki-empty-graph"></div><div class="tiki-full-graph"></div></td></tr>');
+        var timing = event.when + 'ms';
+        if (!event.is_point) {
+            timing += ' / ' + event.duration + 'ms';
+        }
+        tr.find('td:first').text(timing);
+        tr.find('td:eq(1)').text(event.name);
+        if (event.subevents.length) {
+            var subevents = (
+                event.subevents[0].name + ': ' + event.subevents[0].when + '<br>' +
+                event.subevents[1].name + ': ' + event.subevents[1].when
+            );
+            var div = $('<div></div>');
+            div.html(subevents);
+            div.css('font-size', '0.7em');
+            div.appendTo(tr.find('td:eq(1)'));
+        }
+        tr.find('.tiki-empty-graph').css('width', '' + Math.min(99, event.left) + '%');
+        tr.find('.tiki-full-graph').css('width', '' + event.width + '%').css('outline', '1px solid white');
+        tbody.append(tr);
+    });
+    table.appendTo(jQuery('#tiki-client-render-table'));
+
+    var page_load_time = timing.domComplete - timing.responseStart;
+    jQuery('.tiki-page-load-time').text(page_load_time);
+    jQuery('.tiki-js-client-render-time').css('display', 'block');
+    transmitSize();
+}
+
+// Client-side performance monitoring
+function collectClientsidePerformanceData(timing) {
+    /*
+    events = [
+        {
+            'name': 'connect',
+            'timestamp': 1401235025450,
+            'when': 3, // ms from earlierst
+            'duration': 33,
+            'is_point': false,
+            'subevents': [
+                {'name': 'connectStart', 'timestamp': 1401235025450, 'when': 33},
+                {'name': 'connectEnd', 'timestamp': 1401235025450, 'when': 45}
+            ]
+        }
+    ]
+    */
+    var events = [];
+    var eventsByName = {};
+    var endEvents = [];
+    // First pass: populate events array, stash endEvents somewhere, skip timestamp=0
+    jQuery.each(timing, function(name, timestamp) {
+        if (!timestamp) {
+            return;
+        }
+        if (/End$/.exec(name)) {
+            endEvents.push({
+                'name': name,
+                'timestamp': timestamp
+            });
+        } else {
+            var event = {
+                'name': name,
+                'timestamp': timestamp,
+                'is_point': true,
+                'subevents': []
+            }
+            eventsByName[name] = event;
+            events.push(event);
+        }
+    });
+
+    // Second pass: populate subevents, duration and is_point fields
+    jQuery.each(endEvents, function(i, event) {
+        var subeventEnd = {
+            'name': event.name,
+            timestamp: event.timestamp
+        };
+        var event = eventsByName[subeventEnd.name.replace('End', 'Start')];
+        // Event name shouldn't end in 'Start'
+        event.subevents = [{
+                'name': event.name,
+                'timestamp': event.timestamp,
+            },
+            subeventEnd
+        ]
+        event.name = event.name.replace('Start', '');
+        event.is_point = false;
+        event.duration = event.subevents[1].timestamp - event.subevents[0].timestamp;
+    });
+
+    // Third pass: sort events by (timestamp, lastSubEventTimestamp), then populate 'when' fields
+    events.sort(function(a, b) {
+        var aTimestamp = a.timestamp;
+        var bTimestamp = b.timestamp;
+        if (aTimestamp == bTimestamp) {
+            var aStamp = (a.is_point ? a.timestamp : a.subevents[1].timestamp);
+            var bStamp = (b.is_point ? b.timestamp : b.subevents[1].timestamp);
+            return aStamp - bStamp;
+        } else {
+            return aTimestamp - bTimestamp;
+        }
+    });
+    var firstTimestamp = events[0].timestamp;
+    jQuery.each(events, function(i, event) {
+        event.when = event.timestamp - firstTimestamp;
+        jQuery.each(event.subevents, function(i, subevent) {
+            subevent.when = subevent.timestamp - firstTimestamp;
+        });
+    });
+
+    // Final pass: populate .left and .width percentage fields
+    var lastEvent = events[events.length - 1];
+    var lastTimestamp = lastEvent.timestamp;
+    if (!lastEvent.is_point) {
+        lastTimestamp = lastEvent.subevents[1].timestamp;
+    }
+    var fullWidth = lastTimestamp - firstTimestamp;
+    jQuery.each(events, function(i, event) {
+        event.left = ((event.timestamp - firstTimestamp) / fullWidth) * 100;
+        if (event.is_point) {
+            event.width = 1
+        } else {
+            event.width = (event.duration / fullWidth) * 100;
+        }
+    });
+
+    return events;
+}
+
+function transmitSize() {
+    var height = jQuery('#tikibar').height();
+    if (window.parent && window.parent.postMessage) {
+        window.parent.postMessage(JSON.stringify({'tiki_msg_type': 'height', 'height': height}), '*');
+    }
+}
+jQuery(function($) {
+    window.onresize = jQuery.debounce(100, transmitSize);
+    transmitSize();
+    jQuery(window).load(transmitSize); // For Mobile Safari
+
+    // Listen to messages from the parent window
+    window.addEventListener('message', function(ev) {
+        var data = JSON.parse(ev.data);
+        if (data && data.tiki_msg_type == 'ajax_request') {
+            addAjaxRequest(data.url, data.verb, data.status_code, data.ms, data.correlation_id);
+        }
+        if (data && data.tiki_msg_type == 'performance_timing') {
+            addClientsideProfiling(data.timing);
+        }
+
+    });;
+
+    $(document.body).on('click', 'a', function(e) {
+        // Links on the page may be broken because they are in an iframe and chrome
+        // will error with "Refused to display 'https://github.com/...' in a frame
+        // because it set 'X-Frame-Options' to 'deny'.
+        $(e.target).attr('target', '_top');
+    });
+
+    $(document.body).on("click", "#tikibar .tiki-js-request", function(ev) {
+        ev.preventDefault();
+        var el = $(this);
+        var group = el.closest('.tiki-expander-group');
+        var has_been_loaded = group.data('has_been_loaded') || false;
+        var correlation_id = group.attr('data-correlation-id');
+        if (!has_been_loaded) {
+            group.data('has_been_loaded', 1);
+            $.get('/tikibar/?render=1&template=minibar&correlation_id=' + correlation_id, function(html) {
+                group.find('.tiki-js-minibar-container').html(html);
+                transmitSize();
+            });
+        }
+    });
+
+    $(document.body).on('click', '.tiki-expander', function(ev) {
+        ev.preventDefault();
+        $(this).siblings('.tiki-expand-item').toggleClass('tiki-hidden');
+        transmitSize();
+    });
+
+    function setupToggles() {
+        $('.tikibasement').hide();
+        $(document.body).on("click", "#tikibar .tiki-js-toggle", function(ev) {
+            ev.preventDefault();
+            var link = $(this);
+            var target_id = link.attr('href').split('#')[1];
+            var basement = $('#' + target_id);
+            if (basement.is(':visible')) {
+                basement.hide();
+                link.removeClass('selected');
+            } else {
+                $('.tikibasement').hide();
+                basement.show();
+                $('.tiki-js-toggle').removeClass('selected');
+                link.addClass('selected');
+            }
+            transmitSize();
+        });
+    }
+    {% if request.GET.run_js %}
+    setupToggles();
+    {% endif %}
+
+    function truncate_num(num, decimals) {
+        return Math.round(num * Math.pow(10, decimals)) / Math.pow(10, decimals);
+    }
+    function addAjaxRequest(url, verb, status_code, ms, correlation_id) {
+        $('#tiki-ajax-requests-h2').show();
+        var template = $('#tiki-js-ajax-template');
+        var div = template.clone();
+        div.attr('id', '')
+        div.attr('data-correlation-id', correlation_id);
+        div.find('.tiki-id-verb').text(verb + ' ' + status_code);
+        div.find('.tiki-id-ms').text(truncate_num(ms, 2));
+        div.find('.tiki-id-url').html(url.replace(/\//g, '<span class="tiki-slash">/</span>'));
+        template.after(div);
+        div.show();
+        var p = $('#tiki-js-ajax-counter');
+        p.text(parseInt(p.text(), 10) + 1);
+    }
+});
+
+jQuery(function($) {
+    $('#js-tiki-hide').submit(function(ev) {
+        ev.preventDefault();
+        window.parent.postMessage(JSON.stringify({'tiki_msg_type': 'hide'}), '*');
+        return false;
+    });
+});
+</script>
+<style>
+/* dev styles */
+body,
+html {
+    margin: 0;
+    padding: 0;
+    font-family: Helvetica, Arial, sans-serif
+
+}
+
+.tiki-hidden {
+    display: none;
+}
+
+.tiki-traffic .tiki-traffic-wrapper {
+    width: 100%;
+    height: 4px;
+    border-bottom: 2px solid white;
+    overflow: hidden;
+    display: block;
+    opacity: 0.8;
+}
+.tiki-traffic a:hover,
+.tiki-traffic a:focus,
+.tiki-traffic a:active {
+    opacity: 1;
+}
+
+#tikibar {
+
+    z-index: 99;
+    position: relative;
+}
+
+#tikibar .tikibasement .tiki-traffic-wrapper {
+    border: none;
+    height: 20px;
+    opacity: 1;
+    margin-bottom: 1em;
+}
+#tikibar .tiki-graphitem {
+    height: 4px;
+    display: block;
+    float: left;
+}
+#tikibar .tikibasement .tiki-graphitem {
+    height: 20px;
+}
+#tikibar .tiki-key-item {
+    display: block;
+    float: left;
+    width: 12px;
+    height: 12px;
+    margin: 2px 8px 0 0;
+}
+/*#8adb1e #1c4dcb #b21ccb #f53522 #f5aa22 #e7f021;*/
+
+#tikibar .tikifacade {
+    background-color: #f58022;
+    color: white;
+    overflow: hidden;
+    font-size: 16px;
+    padding: 6px 32px 0 47px;
+    position: relative;
+}
+#tikibar h1 {
+    height: 42px;
+    width: 30px;
+    margin: -1px 0 0 -37px;
+    position: relative;
+    float: left;
+}
+
+#tikibar h1 em {
+    height: 42px;
+    width: 30px;
+    display: block;
+    background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEwAAABsCAYAAADAO1QdAAAQ40lEQVR42uWdCXRVxRnH63Jaqz3V2tPqKcXtVLR6tEERREVRFGqliizVGgQs9YhIK1ArRAgEAZEAIRgWAVk1IAQkAoaEBJIAgWwvedn3hQSykIWQ5eWtTr%2Fv5t3nfffdZe4ajr3n%2FA%2Fhvbl3Zn73m2%2B%2BmTtz308IIT%2BhkdHHvBE3jwTFgqYZcX3aespyuIqATQMRUNj%2FFTCo8F2gIJUWpgoYnGMFdfQrMA2WgpW2Cn33fXvdDaA%2FgJ4B%2FQ30DigEFJ59IOoAnhuzZJoV%2Fr%2FTq62gSNBq0ALQTNDroDGg%2B0E3cfKsoQWmBagRwHKxAlCZcd5K7gKlgVpAREyVpw5ipcm%2BxVOIVDoBteF5aycPaYa%2FF4HGgx4EXSdQthT0k6YA8zaZWn6TgYLd4bUWtILTX4cGO7ECCEBJxS9ajjPAPn93lKLzWNC7PhjH%2F64HdAa0xmuVd3otMcUsYEGY4eIxAxK9TekrUB2%2FAqd3LmcqgP8qtBRNwI5vmE%2BVbuusMeXw%2F8mg2w0BBhf%2BFWgCaMuiMQM8AIwY1LRUAWNvkBywwridQunyQEtBQ0HXagIGFxgJSgd52AywMphpW2m6bMVXTPijKmCRU4YqOgcB0LgANl1WTJRYmkbQQi3A3lCRKaPIKcOYdLb6IsXAvB0GtdCSaYBRpjuiBdgLYs3tcPh7koXD79U4ftaC1Zwjd3Mo00VrAfYw%2F4KYGU2zQQuk8St6AMOmT3MO%2Bl6KdBsVAeOFC7d7GouIpzaDuIviiCsvllFaeDDZOf0R5nO5EEGgq9cdWN8NHKZLh%2BKps2x0fLdopFfTQGE83RUADD4MAkWCakFETs7TmxigCFer42eB0TZl1uLlQPBjNZ8R5Oxnyu9MCic0dUWQfsDgg52UJ4rCYy2P1rdo8X1UIcylSlIbt4GkLHmZtB0KJVrqF2Bh8EGKxgv2gUuJJGc2zFbs%2BGlDBNmgFSC5y5KI69w2okd9WAX4ML2AsSrbNJ2c2hxiGDA2PTuqcFee1h2SqcBYYWehBgBt%2BsYTW5X4IbVKMQ0Y20w99bm6hiMnPp1CmvfMMRpU%2FwBjFL%2BM8S1aB9LYI2MHYxIoVrHmA2ObaOaXjGNWAwz9FII3GRYqrN%2BAsU2UD01ibosRxk39AEoHYAnL%2BgI%2Bjc0CHTXXr%2BEsiFggilbZj7BQ4%2BiAARxX5ldMU%2BBH835%2BBSruLjvR160nLFPm1%2BDaUkOYqwAWE%2BXLAUt2Jn76utI5rR8CxxOKLJDtDPjAMCQxxiWs87USRqnru7HOXi3m%2FM0qSAxYMjME%2BGEQblcFjbU8GCrRgkM43DEoWq1qKF634c6P7RvrQjlkwpqzNM82ZZ8UwYXqtQDz9W5gcTRNNXv1330zFoqCUdZ1QD5SrkNCx%2FQClqUHMLap0gxdMj6dxDRRuXQ9RxaR7lNbJKeaFOhrvYDF6QbMZ21JyjqGgN51FWNJQrEcX466PEf72b01jYdX5l48uCSj7uuQ7Kbv1lja06Ir7NUZnZy0WxQBEzvgQju4BeitSu%2FuyDxQcSlpUy5kXNJycmtJV358k%2BdSlTLfBv4EK67ULzGgKCBVfzHDYpk9qDbz3d8TSc28o8s675GCkpVjv4L%2FD9YMrCMjJvz8l3MzrfMfzYeLd0hk7rSGPJbfHL%2BuxNNaQ91Esbei6hCgKctZlKe1lkBZoZwDbbKgxFUNWgq6gxoYJL4R9A4oU02meGc7sg7W6eXXpMafvmbeVObJ%2B2hokQZQfOXKAoNEN4PCQO06ZOi%2BsD%2B0kLaJYg8n1ARpHLqnpYrkzgsq1REWaokkMEjwa1CLzpmSuj3zrGqhcUcAUipbOylLQZm%2BB50HpYNSQNmgSnQpvHSDaSzslN7AQB7okapooTUfXEgccWGkcs8CqvSdOUfqvRCkynAZtB70POgXfBDw2W9B0Zz0BVROHxKO5WVUBdoO%2BjfoFdAQUBBoBCgYFA6yykHLmnVXo6uxxE0Xcpzse6SX%2Fy0VMGvIkDyJvHtAC0A3CQGAz6%2F1%2Bmq%2BC5pBBSxjxoBrILGFc2K%2BF8z1Ut0tfP8gaJvUna7a%2FM9MKmAlx4mr4ChY2RKI2Isl0%2FaUpEi5kELQIIkyD%2FY2S%2F55rQhY9kEu50JPCVwE45lZoJ%2FLgBsKEna%2BMwf2gJU5pR%2Bk5hB3VZoPmOvcDklgFRumiPXi6JduFinjL0HrsFMSOXeO1PInsbAiWuRiSD8UdKsEtFtAyYIdwN75FknrKk5ggKEQGGNltZmi6S2z76sSyKcG9BuRsr0GapCwSnT%2BP1UD7FZQvcSFu0ERoIEiBcM47gz%2FvJy5D1SIAmuu8MHiAnOmCK8Ucl4odIqU7SmB%2BtwLSpTrnNA3yy2wE430vY7dLZMJFnoH6AGB828DNfHPsVdn9giGFKWJ%2FsDil%2FuguYuOBaS%2FfG5vpUB5dvucc18ZbsB4CmSn6M2X06xIlBwawUWmKYhtvgUN550%2FgZ%2F24jcf54r1jlxgzpTPfMAcCSsChkXQvLMEyjCIrSz8PcbbxGTLb53%2FCIZT12kG5q30fxTGXadBL6W%2F87trvOencL8vWj46wI%2B5K1L8YAUAww4gJ8bvnPKo4HO8fJO8%2BQ0AxdCW1xryaIG7uTyDdpEw1TLz4hUvLhSIhOVUAJoMGs39PPv9e%2BuEQokAYGlb%2FYDxw4zCZc%2Fze8gZ2MOBOmnLWLTs%2BRwcVsH1EnUFBheceCX7UF3WrLsvqIj0cRji4o4x3Zzm5anJCIDFhBb44IMHzHlms%2B%2B8%2FIXDc3j50Jdt5sDeCzGLuUO2A3oDe5JxzI2lrvJ1r2eqsDY%2FdRcmtgmFEnLAuGEG%2BB2rmrzzFz2V21txtp1n5dv0Bnaf3yRixdnLpWtezYA71a2m0K0p28sZ62ooFITFAMOnRQLAnCfWMGXI%2Fe%2FDhQosylm4dJSl0%2Fpdg0hYE6E3sFsEQwEYHzbFrc0rWDLSAuNF6pmOCzGLcoRCCT9g3mhfSDjOhLkvi%2BT49b072wvCnslpiP2kwNVQ7JEZkoXpCswLzSk3DrRXZ%2FW2p%2B2phLnzvOpt76ZXbJySVRYxIR2mXzKrNk9Pr909Jx3m1nN6SlNb%2BnrHVHFgxfGiwDDMqN0%2B04J%2BrGDxiEzolLIq1gen1%2B0NsbSl7qiEWK9b4XOG2YqByW2dgYte1PVBiEAowZcoMLSyrGg9H8y8pfteI7ioRVdgpUmagDEdQL1Vr%2FKMNwJYvF6wxEKJAGCJ4ZLAuGGGRo0yAthu3axLJJSQi%2FaF5K48o0eZHjMCWLgu1iURSqgBxoQZFA90ZTTICGAf6mNdx%2BmBwQSiHDA2zNBYrtuMADZVMzCc85IIJWijfaEwQ246W0Y3GAHsRTNCCQZUUTw0tQjSu20Sse%2Ba3PfYTc7K1IcZTkO2MMMD1We1L0I5KQ4Kwgxcz9W76S%2BkJ%2ByeANnWPE7s0dMBXph4mCExnS2hFkOAwYUHMBsUVDpYwVACmif6qd6dwYKQxGT77DliP%2FB%2BYAeQEqV4sZ%2B7JKHZKGA%2FY9ekqlmP5QslAJIrey9xfDtPESQx9W6bSByHPvghzKBY3cOs5%2FCuyHamRnUZ9t4KmrX2YqGEK%2FcgcRxbSmyrhukCKsDqPnnI6%2B%2FCJMvFrE3jrPOH0OWyKcBodnb4zWykbSG9X4w3BBYDbMXDxL5vJmO9YhsihJaAwn6BFsOAOVM%2FuyK63p6ymaJjdsR%2BSGwRT%2BgCyv7lFOZmSFkUbqIQXXeWFW01DlhyZIvcRgVai2OsDqwBK6wWkljshYuCceU0zaJiV%2BbudMOAte19v9UWO59qhwc6VdrVzFhx58kISavr3TCaSSMaOuDeAIX7JbEuXQmrMgwDlj%2FvTw7Lv%2B4hF9ZPIK707dR7ijAckdv652tC%2BYcZX4Q%2BCQFKQWJ2n%2BDebRWbSi9tm0qsc%2B8nNZHjKw0DVrBgSBs7BYyHu7MFYBxStE0Gg1MEyGzFURCeMDETWhCcy2yUULOj7fgnxF6WTIoXDvFNZVesHZ9qGLC8%2BYN9q5I7y88R9kBwDnjQigXSusneJwlHrQaUoyiBeOzdTHm5c%2F8lq16OMQxY4dLndrAZNZ38gvAPLJCz%2FBTTjK6CzVQAfiPpLT%2FtV0a37YofsIqo4NXGWdiCYet9GX0%2BnQgdWKDmRLCQlhpit8aaDg%2Fzw3wdzVWC5cOWwQVWs%2F29mYYBg2eBC7iZIRw%2BrMLlY0jJ2kl%2BnzsuVTO%2Bw5W9R3OzFQwNoAOy5R0mPRVnSXt2LJE6sGX4WdiGN6caBgwyGOmXGcfK7K31DCwxmAEAa7JJT9Y%2BBiJWWNYSATSmY%2BHYylIDrOji0Qgm75Zz%2B0Xz5pYRVbzypYmmAUPlLXyclERMJJa5D%2Fh9LlVoPHrqC5lzELTc0dtQRhqOhEumwRvELcOFo2sC0rRb4wMe%2BOZ99NiLRgK7hfbpNt5JOViYrnrXHFlgrFV0lp0VTcNaF78MCAnPwxvIv6ne8MjYt2wqWUMh1JM2wUs5%2BAWXAoFAfVty4DyEHeDI4Xy1C2OuKmCsn8O7i00Em6%2Fg3iQREFxY3LQInfWRQjfgqgKWv%2BjJegN2izCVRqhs8xGDq7cMBwaxWLUZFTFD%2BaFPdBkOrPDjZ9N%2BLMCgLq2GAyte8efoHwswWD%2FWbDiwgrCnt%2Bp2h6Hbv5yXwAxXsHPgf8%2BGHD3wljt%2BwKkLsMUjLhoOrGj5C28rdeZCvRh%2B5rZ1%2BvWK6Oy5AbF%2FYNoZcB1Mg%2FEXDsVU3bClo8oNB5bzwUOjaQuEFWGhoCVxe77zMWGCcRcLTWikgNfgWicXuJCFyoY8UcGJZsRhI2kLhBXkWwlrDdjMpIJVvvWxB57fF7f5n%2B9oq1cMrCxy0lHDgQkFr3h30Q9h8%2BA2G7FKs9blutJE7PX5xFaYQGzWw4yuJKwmnaDutB2%2Bz7qLkoitLo%2B4e7t8%2BQgdXCtDC8SRhpTlla4ed9B0YHxfg3eaddD8AwH1FidpmubBWY2u5I2kuxhehtTRJNic%2Bc1VzMfBYuJoU4DBvFiPlC%2FCwrKDb4%2B9i9gr05jZTyMmDO3J60h3Aaz2udzI3Cy8gXzL5vo%2Brio3TgsxBRh0x75NmmLNA2dcbSkbDJkwFFNv2nZyJfeoYHkEgW166x%2BmAMsPHX5eDBjO6ztgfZeZoALAHV8JTfZkQGcR6MNefc0UYCXhf00WAuasz1MECt%2B9g88U8R1fcu%2F3wu9875CGc2je28OAK0kVnfmAfUdjTQL2cgwXGFoV%2FYPddX0vQKN8sCv3wiNmSYDM%2B3vsZ7aQi%2FsXCDXLIFOAFS17YRcTrc%2B5j3Qnr5e1KsaSFCwdUAtP8HU0HHXsm00KQof7Te2YAqxi%2FZtTC8OeJl3fzKN7z5dBkMQWosi9vrRu4xv4QiWPacAaj66%2B13Yk9KoCJQhOYs1Fd9yyHtOAuVtrrxF9IVp%2BbL%2BCEnxppUAHgWvdTP2pMaEXomn2UZdgHX%2FxMWbtl%2FPEakYuyz786Qnt717kNVPoKNr6B1jCMurXVkkurgMwuFDYcXC2oBCeVnBobey7F2FxYLPpwGhes0djVc6E5aKg%2BEIL1OrbmJfeJq9tMBUY7OpI0uxfwGKkrEpMrozdevi3cFOBeX%2F30XRYelka%2FpSj2cBCtGwB1AKLlac6TQuwWWYDe1ttYZX4LEkBdPSBKsvxptnAxqrqDcH%2F6AKL9WepUWqBvWI2sGGKmyI0IT1haWyaI80Gdrfi8AHjNgOA4XVVAAsyG9iNigNTA2Bp6DXvNv1XmL0%2F3Gtar6izld3aH8DwN2Y75OQ6s9lhJCyflRXF2WjK49X1aoD9Dx8TvbvX8GXhAAAAAElFTkSuQmCC");
+    background-position: top left;
+    background-repeat: no-repeat;
+    background-size: 30px;
+    overflow: hidden;
+    text-indent: -5000px;
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+#tikibar h1 .eyes {
+    position: absolute;
+    top: 12px;
+    background-color: #8adb1e;
+    height: 5px;
+    width: 8px;
+    display: block;
+    -webkit-animation-duration: 1.2s;
+    -webkit-animation-name: eyes;
+    -webkit-animation-iteration-count: infinite;
+    -webkit-animation-direction: alternate;
+}
+#tikibar h1.tiki-angry .eyes {
+    -webkit-animation-name: angryeyes;
+}
+@-webkit-keyframes eyes {
+    from {
+        background-color: #e7f021;
+    }
+
+    to {
+        background-color: #8adb1e;
+    }
+}
+@-webkit-keyframes angryeyes {
+    from {
+        background-color: #f53522;
+    }
+
+    to {
+        background-color: #e7f021;
+    }
+}
+#tikibar h1 .eye-left {
+    left: 4px;
+}
+#tikibar h1 .eye-right {
+    right: 4px;
+}
+
+#tikibar input.tiki-submit {
+    background-color: white;
+    border: 1px solid black;
+    padding: 5px 10px;
+}
+
+#tikibar .tiki-settings {
+    width: 16px;
+    height: 16px;
+    overflow: hidden;
+    background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADwAAAA8CAMAAAANIilAAAAC2VBMVEUAAACgUyShVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCWhVCVMEYpBAAAA8nRSTlMAAQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyAhIiMkJSYnKCkqKywtLi8wMTIzNDU2Nzg5Ojs8PT4%2FQEFCQ0RGR0hJSktMTU5PUFFSU1RVVldYWVpcXV5fYGFiY2RlZmdoaWprbW9wcXJzdHV2d3h5ent8fX5%2FgIGCg4SGh4iKi4yNjo%2BQkpOUlpiZmpucnZ6foKKjpKWmp6ipqqusra6vsLGytLW2t7m6u7y9vr%2FAwcLDxcbHyMnKy8zNzs%2FQ0dLT1NXW19jZ2tvc3d7f4OHi4%2BTl5ufo6err7O3u7%2FDx8vP09fb3%2BPn6%2B%2Fz9%2FkyK0xwAAAVTSURBVBgZncGNQ9T1Acfxzx3cgcnxfIm6WroHcFNWGWXZwGbb1FKbmKlzZKy5NR9YT%2Bth2YMOm6k5Z9BmLDXKLB96mlZuIYpDUWdZoJZcdDwV4iX3%2Fgv2vfv97ryDwrHXS1%2FLMXKVDzqqRjk0YM45nYQF7nNpgBwziVrs1MDk1WIEAhhN4zQwt2H4165tCQJ363%2BRmCDbH4FAiTThNFCVpgtJuvjqkp%2BNyXTKcK0B3r5Ucm4G3vmWQjzDxhaN8Lr0FbLLGjHenZYiKX0jUJ0ouTcBNbmSksb9FaOpNEN95FRgW5kh9y1twEa3pMcw7kl1pC3qwVKZo148FURV37iwGegpkzHnDMb66RVEVXgUx3E9RtD3GecdLpCR%2FjLndbUSUuhQrIv%2BBHRvnfbzg0R03Kmwqc1EnHjizl1ngQ0excp4Bzgo6Ru13YQ13y3b1A%2BChPQ0FEqqBT70Klb2EaBGxuDl%2Bxp9p4%2B9MUNRuRV1H%2FqO167zyNgCHM5WrPQ3gMZ8hY2fdUuu4jivuvVyhXnfB%2BqzFCv5YYy939QFZD57FqhMUZzvtGK8kqx%2BOVYQUuhQnIQHMTqL1a8f%2BDH%2B5lYvg7dgvKx%2BLesGXnepj9RTwB7FyhkxYniiYmwDPh%2BtvtyVwG5FZU%2B5d8vuXduWF1%2BiqH8BDYPVV95eYLcibtiIbcd0RWwNQnOB4uWNnzj7VeDcs7Ikl%2Fo5b5FLlru%2BAN4q%2FlHBZYq4cmmNr4uQ1mtkmU2cu1wKu%2FQYIV0fvbn0OoXdfoSIp2TJPUjIvmf%2B%2FI8vMVqLZPnll9hOzpeRT9SaQQpLWo5x8oFRkvdXn2BUpMjyOz8RcyTVYPl4%2B0LZRh0BmmcqbPIJwD9OtuLNx88R9vkQFWC0r1628KdpipiCsV62hwNAsSISC%2Bc%2FUd4SBEr0ANBVpjizgbZZsv2wCbjfqVg3dwJ%2F1zLgU8W7FTh8lWz5B4BVbsU5DezVUqB9vOLcBrROl62wCXjEqVjD%2FMB2zQR66ufl5ycrajrGStnuCwAlinLn58%2FYEQCWK6MDI1BX99I9w2Qb8xFw6iaFjT4OnJkg2%2FCy6roD7YTkSguIeHOqLO7HMU7NkTFjP0ZVuizjdhKxUsaTRDSNl%2BWaNozO51et2uDH6JwoS%2B57RGz2yEiYt%2B0cltdkSfotcVYky1KF7WhZpizDJt1RWt4FtE2TxXU%2FMSq9slzZjLF1wR2zrlCcuUBwnWwJcw9g8y3xyPZIF%2FB4jvpIPQnsVNT3f%2FPc8e7u96uXXKuo8gCczFFfKX6gRjEyrygqunyIYqwIQFu2%2Bvo1ENygfv3hC%2BBp9eaY8inQMVf9KmwBAmWJiudtxKhNVb9cr2K0jVQc1wIMf4EuYIQPY9kgxcrYA%2Fh%2BojD30KHqJSsnU2HXtQDvZSpW9lHgFYXcsH3%2FoUO1L4xWlLf83fpD9bvmKeQvZyEwVLGyjwFvS3I8dYKwDxbJdlNDgJCWZzySXuyBtiGKlb4TaJkrb%2BVZbB2lCpvQiO3cP8foFz7gYJZiuRcDwZa6YwGiGsbKSKvmvMb6z4LA6osUZ2QHUYEVq1uBniUyZp%2FBOPpSG1EdeQ7FcUwi4t%2FfTfHMbAeed0l6DGPt8KzLqomY5FAvzh%2BfIuy5HEnpm4AXXZJ7E9AwVlLG74OEHJnoVB%2BOS0pe2PfWowVpMlxrgJ1eybEJ2PNtGcl5965b%2F%2FS0oQ59lcTUrIxBspQD7ZOloo%2BBqnSFJaWkDHbqwuYDwf88tHh%2FEFiqgfnefiB4pqsHCEzWwDhKiXo0QQPkerAHy5MuDVhC4Y4A0HBzgv4fztRrbxySoK%2F3X0nIX1WzNZOGAAAAAElFTkSuQmCC");
+    background-position: 0 0;
+    background-repeat: no-repeat;
+    background-size: 16px;
+    display: block;
+    text-indent: -5000px;
+    position: absolute;
+    right: 12px;
+    top: 1em;
+    opacity: 0.8;
+}
+
+#tikibar .tiki-settings:hover,
+#tikibar .tiki-settings:focus,
+#tikibar .tiki-settings:active {
+    opacity:1
+}
+
+#tikibar .tiki-set {
+    float: left;
+    margin: 0 14px 6px 0;
+    padding: 5px;
+    display: block;
+}
+#tikibar a.tiki-set:link,
+#tikibar a.tiki-set:visited {
+    text-decoration: none;
+    border: none;
+    color: white;
+}
+#tikibar a.tiki-set:hover,
+#tikibar a.tiki-set:focus,
+#tikibar a.tiki-set:active,
+#tikibar .tiki-set.selected {
+    text-decoration: none;
+    border: none;
+    color: white;
+    background-color: #f7994d;
+}
+
+#tikibar .tiki-set-header {
+    float: left;
+    font-weight: 200;
+    font-size: 0.625em;
+    text-transform: uppercase;
+    margin: 0 0 0.2em 0;
+    padding: 0;
+    color: #feeee2;
+}
+#tikibar .tiki-set p {
+    font-weight: bold;
+    margin: 0;
+    letter-spacing: 0.04em;
+    padding: 0;
+    clear: left;
+}
+
+#tikibar .tiki-group {
+    overflow: hidden;
+    width: 100%;
+    margin-left: -5px;
+}
+
+#tikibar .tiki-group .tiki-set {
+    padding-bottom: 0;
+    margin-bottom: 0;
+}
+
+#tikibar .tiki-qualifier {
+    font-size: 0.75em;
+    font-weight: normal;
+    color: #feeee2;
+    letter-spacing: normal;
+    margin-left: 0.1em;
+}
+
+#tikibar .tikibasement {
+    background-color: #d36e1d;
+    color: white;
+    padding: 1px 88px 10px 12px;
+    position: relative;
+    min-height: 80px;
+    overflow: hidden;
+    background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAeCAYAAAAl%2BZ4RAAAATUlEQVQ4je2UwQ0AIAgDC%2BkODueSbqhDnAmGyL%2BkXBtizbEFxhFELhnq5YAWnNxB%2BQKmvwARn9AihWqIuAf5IfZIgUJkBl6AyD9SNcQD11cC0ZhYgDUAAAAASUVORK5CYII%3D");
+    background-position: 0 0;
+    background-repeat: repeat-x;
+    background-size: 8px;
+}
+.tikibasement a:link,
+.tikibasement a:visited {
+    color: #fcd7ba;
+    text-decoration: none;
+    border-bottom: 1px solid #fcd7ba;
+}
+.tikibasement a:hover,
+.tikibasement a:focus,
+.tikibasement a:active {
+    color: #feeee2;
+    text-decoration: none;
+    border-bottom: 1px solid;
+}
+#tikibar .tikibasement:after {
+    content: " x";
+    background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFcAAAB2CAMAAACK5v%2FNAAAB9VBMVEUAAAD%2F%2F%2F%2F1gCL3nVT6wJH%2B7uL1gCL3nVT6wJH1gCL3nVT6wJH1gCL6wJH1gCL3nVT6wJH1gCL1gCL3nVT6wJH1gCL3nVT6wJH1gCL3nVT6wJH2jjr1gCL3nVT6wJH1gCL6wJH1gCL3nVT6wJH1gCL3nVT6wJH6vIr5uIT1gCL6wJH1gCL3nVT6wJH1gCL3nVT6wJH1gCL3nVT6wJH1gCL1gCL6wJH1gCL3nVT6wJH1gCL3nVT6wJH1gCL3nVT6wJH3mk%2F5s3r7y6T1gCL2jzz3nVT6wJH1gCL6wJH1gCL1gCL1gCL3nVT6wJH1gCL3nVT6wJH3m1H3mEv3nFH1gCL3nVT6wJH1gCL3nVT6wJH1giX2kT%2FNaxzQcyjTezTTezXZjE7cklbclFnfnGfvxaTyvpPyzbD1gCL1giX1hCj1hCn1hSv1hy%2F11b32hy72hy%2F2iDD2iTH2iTL2izX2jDf2jTj2jjr2jjv2jzv2kD72kkH2lET2lkf3lEX3lUb3lkj3mEv3mEz3mU73m1H3nFL3nFP3nVT4oFr4o174pGH4qGf4rG743sn5sHX5sHb5tHz5t4L5uIP5uIT6t4L6vIr6vo76wJH6w5b7xZr7yaD7zKf70a%2F749H80rL82r783cT83sX94Mr94cv94s796Nf96Nj%2B7uIvBXaNAAAAXHRSTlMAABAQEBAgICAwMDA%2FP0BAQE9QUFBfX19gYGBkb29vcHB%2Ff3%2BAgICHiI%2BPkJCQn5%2BfoKCgrK%2BvsLCwv7%2B%2FwMDAxMnMz8%2FPz9DQ19jf39%2Fg4ODi6Ozv7%2B%2Fw8PD1%2BJOiRfwAAAY5SURBVGjetdr9f9NEGADwW1Zrs0KpHWO16rq5Uh2dkzKhMleqTrZp2ZgaKVPnu9xgEyY4BRTRDuP7CwJBxamo5O80TS6XS3O5y13n88s%2Be%2Fl893yee33SgK4u4ItYbrxWq40PJnw%2F7RIN4HcT44Ybs7mtc4sGGQvprXFjNaMtDsa2wI3NGoFYSHbs0ljDWMx16tYMeuQ6c4uGwYCl3bRhsGBpd8FgwrJu0WBGWtJNsFljMSnnjnNcYzYm4%2FLSba08GXec7xqDYrPNXmmLEdyn77Jc%2F5YKOO6gYRwY2L59YJrl%2FnVtphAXcxcm0SaeZsjmv6chrKYE3OSA95fDYexvpvkDtKKiRM%2BXjPQxuvuHaf7dcuG8KuWC5BzVvWOa5qc23FClXBCjFflXizVv2C6ckXOp8J8t1ykEhAU5F4C9hDjdmtw3fz%2FxnQV%2F6LgNRdIFA5g9YJ9O7y69uvSOaV5BCedlXZCYtNVjOWeJv7n0xuuvoZlmRVXatebF8PBwf2zQZm%2B99Z5pvn3CvIZc2IFrR84pxj%2BmE1%2B5biq6mxiMhbG3EOuOm5CbtvbuNhZtnzfvIPYGlHCL%2BA7iFnjWW8J2bJ7GrirkGkYNy0m81%2F%2F80%2Bbm7dubv1yBXgBB18r5YNGKR7xj%2F%2FoaDERFwN0ZskFeCrIwK%2BCGnJ2fU1gotI7nIrMVoX1nMCoLM2L7WWB7vH6BytYF999E2xH07Skqi0ct8v4QmyTU7%2BnJQqgp4udFP6rF1W8%2BgGFRkDo3kwPDDz2%2FBhkRlzuPgTLDUmFZ7v7AY8l0RVweWwZSLo%2F1pSvgVqBAutHdMhRJN7Kb57EFIONmeKymyLhqQzDdaC53KgTSjeZyxwxfy4RcbnGJfVfAVbjFJfZdAbfCZaeAhMuvAkxJuMo8l50AEm6Bn64q4cb5g1YGEi5%2F6mpxCTfOr0IBRA%2FslqDwCqZGKuVzqUvi%2FOV11pJwK1j3zb6CQrpZCrus6%2FpF9gq2v1YbZOFhiXSrFPeM5errzBWMJugM6dqLB7nUUVtvufpqWLqESw6p0zEil1YGeN52m8thk8F1U74V46x25FbCXVRile1WSbeK3QbDtStRB2zXK79zYjuuClluk7z2U1xAPuiwR6qE3CzTbc2JAs91t1A7%2BXnkFtiu3rxwH9ctEy5UHbfMca04OtrDdhvkbpt13CrfbdH7eqmuQp4lToollntOD8TRnrD54N4AHKrKcs%2B0q0ce6AbhbtmriZB7eFdIfTPEAx81gnuSVF%2Fa3c3YH7Cb97khZ1B7cR%2Ff3Xs3xS0TbsXnhhzFzeDA6ccPjfa2uTOeq7gnrOOG3Egu67R4tNvvKsRp7S7cvOOGHJrnKeoTPe11yBDHqnvNResNaFT3bEA9sitY35J3x4rjMwu59IFbDrCHrBjt7fa56PqlEXcQdz8LK%2FBn1ALrx%2Fd1e67qlTfudUzuuUkvxDrd1R8k8iXKUPb%2BheuW%2BCvDWyJoonXt6PbKUPeli92QGfEJhT1srY0d9%2B4%2BdFTXiRM3690VCvx71GqQ3XjlhRfdYezC6U55YzTlu58pWuSEcTzZ5e5lVnXdm5hz6%2FTuqfT%2BdYXlnmtk5t2Jha8K%2BAEYQLeriaibO45l3M4oOK0s0boiXhOE8Z1QU3E9SNZtnlL0OXF2g85unPSe%2FblttcdmidaUfo2Ayx81qdX1bpqordayvoZYARzYKkYzAlvHdzh1pq3LCYXhygUf3VwNsBM4v0LwsUqW0WCsrH%2Fs2M2L7%2BMfPodY7X7cvM%2FTmrKMBoWiqtrMhJtdphrS5ahTQu5jDSJZJT8f3jYoY1AwRuzc4nnidl6i9WCZuoi6P66mMoWqr2sfozd3ygjsKMZC28b4M%2FKqlg1vR2OLP16STTbOaHNbn7xc%2FeJlLvJs2y5YH2Gp7gckD%2Fftd%2F780lr4Yy%2B1b2hswo6hvjinK0cfONWsIezbr8E1w%2Fj6FPcJCv95tft5zoLz7banWh9kfBl42jOyjf2Eg5au86GA8zv0b4ZGJtwYGbpHjfC8pO37xLG9SecVoTT5hkhS9I2YgItLnCPfENnZqYtn2lyOfEOkuCVuon%2B78431FtL0Hvu1lU5d%2Fy%2BLexIgab9ns7WuHXYh%2Fgd32pibHBZ9L%2Bg%2Fl288Wrv5%2Fj8AAAAASUVORK5CYII%3D");
+    background-position: 0 0;
+    background-repeat: no-repeat;
+    background-size: 50px;
+    display: block;
+    text-indent: -5000px;
+    width: 50px;
+    height: 68px;
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+}
+
+#tikibar .tikibasement h2 {
+    margin: 0.75em 0 0.75em 0;
+    padding: 0;
+    font-size: 1.2em;
+    color: white;
+}
+#tikibar .tikibasement p {
+    padding: 0;
+    margin: 0 0 0.8em 0;
+}
+#tikibar .tikibasement ul,
+#tikibar .tikibasement li {
+    list-style-type: none;
+    margin: 0 0 0.2em 0;
+    padding: 0;
+    background: none;
+}
+#tikibar .tikibasement ul {
+    margin-bottom: 0.8em;
+}
+#tikibar .tiki-pair em {
+    text-transform: uppercase;
+    font-weight: 200;
+    font-size: 0.785em;
+    font-style: normal;
+    color: #f2e3d8;
+    margin-right: 0.5em;
+}
+
+#tikibar table {
+    color: white;
+    width: 100%;
+    border-spacing: 0;
+    font-size: 16px;
+}
+
+
+#tikibar table th,
+#tikibar table td {
+    padding: 5px 5px 6px 5px;
+    text-align: left;
+    vertical-align: top;
+}
+#tikibar table thead th {
+    background-color: #e77920;
+    color: #FFFFFF;
+    font-weight: normal;
+    text-transform: uppercase;
+    font-size: 0.75em;
+}
+#tikibar .tiki-sql strong {
+    font-weight: 200;
+    font-size: 0.75em;
+    text-transform: uppercase;
+    color: #feeee2;
+    margin: 0 0.2em;
+}
+#tikibar table tbody .tiki-sql {
+    border-left: 4px solid white;
+}
+#tikibar table thead .tiki-sql {
+    padding-left: 11px;
+}
+#tikibar .tiki-timing-graph {
+    width: 100%;
+}
+#tikibar table .tiki-timing-graph {
+    width: 30%;
+}
+#tikibar table td.tiki-type {
+    font-size: 0.75em;
+    text-transform: uppercase;
+    font-weight: 200;
+    padding-top: 8px;
+}
+#tikibar .tiki-timing-graph .tiki-empty-graph,
+#tikibar .tiki-timing-graph .tiki-full-graph {
+    height: 9px;
+    float: left;
+    margin-top: 5px;
+}
+#tikibar .tiki-timing-graph .tiki-full-graph {
+    background-color: white;
+}
+#tikibar .tiki-timing-graph .tiki-adb {
+    background-color: #ffed00;
+}
+#tikibar .tiki-timing-graph .tiki-django {
+    background-color: #8adb1e;
+}
+
+#tikibar .tiki-request .tiki-slash {
+    color: #feeee2;
+    font-weight: 200;
+    margin: 0 0.4em 0 0.3em;
+    font-size: 0.75em;
+}
+
+.tiki-expander-group {
+    margin-bottom: 0.8em;
+}
+.tiki-expander-group .tiki-expander a {
+    background-color: #e97a20;
+    padding: 0.2em;
+    display: block;
+    border: none;
+    text-decoration: none;
+    cursor: pointer;
+    color: white;
+}
+.tiki-expander-group .tiki-expander a:hover,
+.tiki-expander-group .tiki-expander a:focus {
+    background-color: #f68c38;
+}
+
+.tiki-expander-group .tiki-expand-item {
+    padding: 10px;
+    overflow: hidden;
+}
+.tiki-expander-group.tiki-expanded .tiki-expand-item {
+    background-color: #f68c38;
+}
+.tiki-expander-group.tiki-expanded .tiki-expander a:hover,
+.tiki-expander-group.tiki-expanded .tiki-expander a:focus {
+    background-color: #e2761f;
+}
+
+.tiki-expander-group .tiki-expand-item h3 {
+    font-size: 1em;
+    font-weight: bold;
+    margin: 0;
+}
+</style>
+</head>
+<body>
+<div id="tikibar">
+
+    <div class="tiki-traffic">
+        <a href="#tiki-server-time" class="tiki-traffic-wrapper tiki-js-toggle">
+            {% for bar in tiki.bars %}
+                <div class="tiki-graphitem" title="Time spent in {{ bar.name }}: {{ bar.ms }} of {{ tiki.total_time.duration|floatformat:0 }}" style="background-color: {{ bar.color }}; width: {{ bar.width }}%;"></div>
+            {% endfor %}
+        </a>
+    </div>
+
+    <div class="tikifacade">
+        <h1{% if tiki.angry %} class="tiki-angry"{% endif %}><span class="eyes eye-left"></span><span class="eyes eye-right"></span><em>Tikibar</em></h1>
+
+        <a href="#tiki-server-time" class="tiki-set tiki-js-toggle">
+            <h2 class="tiki-set-header">Server render time</h2>
+            <p>{{ tiki.total_time.duration|floatformat:0 }}<span class="tiki-qualifier">ms</span></p>
+        </a>
+
+        <a href="#tiki-sql-queries" class="tiki-set tiki-js-toggle">
+            <h2 class="tiki-set-header">Time in queries</h2>
+            <p>{{ tiki.sum_sql|floatformat:2 }}<span class="tiki-qualifier">ms / </span>{{ tiki.queries|length }}</p>
+        </a>
+
+        <a href="#tiki-client-render" class="tiki-set tiki-js-toggle tiki-js-client-render-time" style="display:none;">
+            <h2 class="tiki-set-header">Client render time </h2>
+            <p><span class="tiki-page-load-time">0</span><span class="tiki-qualifier">ms</span></p>
+        </a>
+
+        <a href="#tiki-templates" class="tiki-set tiki-js-toggle">
+            <h2 class="tiki-set-header">Templates</h2>
+            <p>{{ tiki.templates|length }}</p>
+        </a>
+
+        <a href="#tiki-log-lines" class="tiki-set tiki-js-toggle">
+            <h2 class="tiki-set-header">Log lines</h2>
+            <p>{{ tiki.loglines|length }}</p>
+        </a>
+
+        <a href="#tiki-analytics-actions" class="tiki-set tiki-js-toggle">
+            <h2 class="tiki-set-header">Analytics</h2>
+            <p>{{ tiki.analytics|length }}</p>
+        </a>
+
+        <a href="#tiki-ajax-requests" class="tiki-set tiki-js-toggle">
+            <h2 class="tiki-set-header">Requests </h2>
+            <p id="tiki-js-ajax-counter">0</p>
+        </a>
+
+        <a href="#tiki-settings" class="tiki-settings tiki-js-toggle">Settings</a>
+    </div>
+
+    <div class="tikibasement" id="tiki-server-time">
+        <h2>Server render time</h2>
+
+        <p>Total server render time: <strong>{{ tiki.total_time.duration|floatformat:0 }}</strong><span class="tiki-qualifier">ms</span></p>
+
+        <div class="tiki-traffic">
+            <div class="tiki-traffic-wrapper">
+                {% for bar in tiki.bars %}
+                    <div class="tiki-graphitem" title="Time spent in {{ bar.name }}: {{ bar.ms|floatformat:2 }} of {{ tiki.total_time.duration|floatformat:0 }}" style="background-color: {{ bar.color }}; width: {{ bar.width }}%;"></div>
+                {% endfor %}
+            </div>
+            <p>Time spent in:</p>
+            <ul>
+                {% for bar in tiki.bars %}
+                    <li><span class="tiki-key-item" style="background-color: {{ bar.color }}"></span> <strong>{{ bar.name }}</strong>, {{ bar.ms|floatformat:2 }}<span class="tiki-qualifier">ms</span></li>
+                {% endfor %}
+            </ul>
+        </div>
+
+    </div><!-- /.tikibasement -->
+
+    <div class="tikibasement" id="tiki-sql-queries">
+
+        <p>Total time in SQL: <strong>{{ tiki.sum_sql|floatformat:2 }}</strong>ms</p>
+
+        <table cellspacing="0">
+            <thead>
+                <tr>
+                    <th>Timing</th>
+                    <th class="tiki-sql">Query</th>
+                    <th class="tiki-timing-graph">Load</th>
+                    <th class="tiki-type">Type</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for query in tiki.queries %}
+                <tr>
+                    <td>{{ query.timing.duration|floatformat:2 }}<span class="tiki-qualifier">ms</span></td>
+                    <td class="tiki-sql" style="border-color: #{{ query.color }};">{{ query.sql|safe }}</td>
+                    <td class="tiki-timing-graph">
+                        <div class="tiki-empty-graph" style="width: {{ query.bar.left }}%;"></div>
+                        <div class="tiki-full-graph tiki-{% if "adb" in query.type %}adb{% else %}django{% endif %}" style="width: {{ query.bar.width }}%;"></div>
+                    </td>
+                    <td class="tiki-type">{{ query.type }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+         </table>
+
+    </div><!-- /.tikibasement -->
+
+    <div class="tikibasement" id="tiki-client-render">
+        <h2>Client timing</h2>
+        <div id="tiki-client-render-table"></div>
+    </div><!-- /.tikibasement -->
+
+    <div class="tikibasement" id="tiki-templates">
+        <h2>Templates</h2>
+        <p>Python view <strong>{{ tiki.view }}</strong> in <a href="https://github.com/eventbrite/core/blob/{{ tiki.release_hash }}/{{ tiki.view_filepath }}" class="tiki-request">{{ tiki.view_filepath_with_slashes|safe }}</a></p>
+        <ul>
+        {% for template in tiki.templates %}
+            <li class="tiki-request">{{ template.timing.duration|floatformat:2 }}<strong class="tiki-qualifier">ms</strong> <a href="https://github.com/eventbrite/core/blob/{{ tiki.release_hash }}/{{ template.filepath }}">{{ template.filepath_with_slashes|safe }}</a></li>
+        {% endfor %}
+        </ul>
+    </div><!-- /.tikibasement -->
+
+    <div class="tikibasement" id="tiki-log-lines">
+        <h2>Log Lines</h2>
+        <ul>
+        {% for log in tiki.loglines %}
+            <li class="tiki-pair"><em>{{ log.0 }}</em> {{ log.1 }}</li>
+        {% endfor %}
+        </ul>
+    </div><!-- /.tikibasement -->
+
+    <div class="tikibasement" id="tiki-analytics-actions">
+        <h2>Analytics Actions</h2>
+        <ul>
+        {% for action in tiki.analytics %}
+            <li class="tiki-pair"><em>{{ action.0 }}</em> {{ action.1 |linebreaks }}</li>
+        {% endfor %}
+        </ul>
+    </div><!-- /.tikibasement -->
+
+    <div class="tikibasement" id="tiki-ajax-requests">
+        <h2 id="tiki-ajax-requests-h2" style="display:none">Ajax requests</h2>
+
+        <div class="tiki-expander-group tiki-expanded" id="tiki-js-ajax-template" style="display:none">
+            <div class="tiki-expander">
+                <a class="tiki-request tiki-js-request"><strong class="tiki-qualifier tiki-id-verb">GET</strong> <span class="tiki-id-ms">300</span><span class="tiki-qualifier">ms</span> <span class="tiki-id-url">/foo/bar</span></a>
+            </div>
+            <div class="tiki-expand-item tiki-hidden tiki-js-minibar-container">
+
+            </div><!-- /.tiki-expand-item -->
+        </div>
+
+        {% if tiki.request_history %}
+        <h2>Recent requests</h2>
+        {% endif %}
+        {% for row in tiki.request_history %}
+            <div class="tiki-expander-group tiki-expanded" data-correlation-id="{{ row.c }}">
+                <div class="tiki-expander">
+                    <a class="tiki-request tiki-js-request"><strong class="tiki-qualifier tiki-id-verb">{{ row.v }} {{ row.s }}</strong> <span class="tiki-id-ms">{{ row.ms|floatformat:2 }}</span><span class="tiki-qualifier">ms</span> <span class="tiki-id-url">{{ row.u }}</span></a>
+                </div>
+                <div class="tiki-expand-item tiki-hidden tiki-js-minibar-container">
+
+                </div><!-- /.tiki-expand-item -->
+            </div>
+        {% endfor %}
+
+
+    </div><!-- /.tikibasement -->
+
+    <div class="tikibasement" id="tiki-settings">
+        <h2>Tiki settings</h2>
+        <p><a href="/tikibar/?correlation_id={{ tiki.correlation_id }}&amp;render=1">Export this bar</a> / <a href="/tikibar/?correlation_id={{ tiki.correlation_id }}">as JSON</a></p>
+
+        <p>Correlation ID: <strong>{{ tiki.correlation_id }}</strong> (<a href="https://eventbrite.splunkcloud.com/en-US/app/search/search?q=search%20index%3Dweb_analytics%20correlation_id%3D{{ tiki.correlation_id }}&earliest=-15m&latest=now">Splunk logs</a>)</p>
+
+        <p>Release: <a href="https://github.com/eventbrite/core/tree/{{ tiki.release_hash }}">{{ tiki.release }}</a></p>
+        <form action="/tikibar/off/" method="post">
+            {% csrf_token %}
+            <p>
+                <input class="tiki-submit" type="submit" value="Turn off the Tikibar for all pages">
+            </p>
+        </form>
+        <form id="js-tiki-hide">
+            <p>
+                <input class="tiki-submit" type="submit" value="Hide the Tikibar on this page">
+            </p>
+        </form>
+
+    </div><!-- /.tikibasement -->
+
+</div>
+</body>
+</html>

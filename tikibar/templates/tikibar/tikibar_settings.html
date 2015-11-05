@@ -1,0 +1,73 @@
+<!doctype html>
+<html>
+<head>
+<title>Tikibar settings</title>
+<style>
+body,
+html {
+    margin: 0;
+    padding: 0;
+    font-family: Helvetica, Arial, sans-serif;
+    background-color: #f58022;
+    color: white;
+}
+body {
+    margin: 1em 2em;
+}
+input.submit {
+    background-color: white;
+    border: 1px solid black;
+    padding: 5px 10px;
+    font-size: 13px;
+}
+a:link,
+a:visited {
+    text-decoration: none;
+    border: none;
+    color: white;
+}
+
+</style>
+</head>
+<body>
+{% if is_active %}
+    <h1>Tikibar is currently ON</h1>
+    <form action="/tikibar/off/" method="post">
+        {% csrf_token %}
+        <input type="submit" class="submit" value="Turn off the Tikibar">
+    </form>
+    {% if request.GET.set_for_api_domain %}
+        <img src="/tikibar/set-for-api-domain/">
+    {% endif %}
+{% else %}
+    <h1>Tikibar is currently OFF</h1>
+    <form action="/tikibar/on/" method="post">
+        {% csrf_token %}
+        <input type="submit" class="submit" value="Turn on the Tikibar">
+    </form>
+{% endif %}
+<p><a href="/">Back to /</a></p>
+<p><a id="referrer" style="display: none;" href="#">Back to </a></p>
+
+<script type="text/javascript">
+var referrerEl = document.getElementById('referrer'),
+    referrer;
+
+// We redirect to the tikibar page after turning it on.
+// Let's save the last non-tikibar page always.
+if (document.location.pathname.indexOf('tikibar') === -1) {
+    referrer = document.referrer;
+    localStorage.setItem('tikiBarReferrer', referrer);
+} else {
+    referrer = localStorage.getItem('tikiBarReferrer');
+}
+
+if (referrer) {
+    referrerEl.style.display = 'block';
+    referrerEl.href = referrer;
+    referrerEl.appendChild(document.createTextNode(referrer));
+}
+</script>
+
+</body>
+</html>
