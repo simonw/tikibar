@@ -36,29 +36,23 @@ def clear_current_request():
 
     __current_instances.request = None
 
-class SetRequestAndCorrelationIDMiddleware(object):
+class SetCorrelationIDMiddleware(object):
     def process_request(self, request):
         # Add a correlation id to the request (needed later)
         request.correlation_id = uuid.uuid1(
             node=uuid.getnode(),
             clock_seq=None
         ).hex
-        # store a reference to the request and continue processing
-        set_current_request(request)
         return None
-
-    def process_response(self, request, response):
-
-        # Note: Process response will be called even in case of exceptions,
-        # Django will catch exceptions, call process_exception,
-        # and then call process_response in the end. Hence it is safe to clear
-        # it here, and not in process_exception.
-        clear_current_request()
-
-        return response
 
 
 class TikibarMiddleware(object):
+
+    def process_request(self, request):
+
+        # set the request on tikibar's context
+        set_current_request(request)
+        return None
 
     def process_view(self, request, view_func, view_args, view_kwargs):
         from .toolbar_metrics import get_toolbar
@@ -138,5 +132,11 @@ class TikibarMiddleware(object):
             if request.is_secure():
                 if _should_show_tikibar_for_request(request):
                     set_tikibar_active_on_response(response, request)
+
+        # Note: Process response will be called even in case of exceptions,
+        # Django will catch exceptions, call process_exception,
+        # and then call process_response in the end. Hence it is safe to clear
+        # it here, and not in process_exception.
+        clear_current_request()
 
         return response
