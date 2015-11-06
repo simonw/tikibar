@@ -1,6 +1,7 @@
 import os
 import uuid
 import logging
+from functools import wraps
 
 from gargoyle import gargoyle
 from django.conf import settings
@@ -194,3 +195,30 @@ def format_analytics_action_for_tikibar(action_data):
     for key in sorted(action_data):
         data.append('{key}:{value}'.format(key=key, value=action_data[key]))
     return '\n'.join(data)
+
+
+def ssl_required(function):
+    """Decorator for SSL. If the request is not made over SSL,
+       redirect to SSL.
+
+    """
+    def decorator(view_func):
+
+        def _wrapped_view(request, *args, **kwargs):
+            if request.is_secure():
+                return view_func(request, *args, **kwargs)
+
+            parsed = urlparse.urlparse(request.build_absolute_uri())
+            https_url = urlparse.urlunparse((
+                'https',
+                parsed.netloc,
+                parsed.path,
+                parsed.params,
+                parsed.query,
+                parsed.fragment
+            ))
+            return HttpResponsePermanentRedirect(https_url)
+
+        return wraps(view_func)(_wrapped_view)
+
+    return decorator(function)

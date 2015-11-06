@@ -5,13 +5,13 @@ from django.conf import settings
 from django.core.cache import cache
 from django.utils.encoding import smart_bytes
 from django.utils.html import escape
-from ebapps.ebauth.decorators import ssl_required
 from .utils import (
     get_tiki_token_or_false,
     set_tikibar_active_on_response,
     set_tikibar_disabled_by_user,
     tikibar_feature_flag_enabled,
     get_tiki_token_or_false_for_tikibar_view,
+    ssl_required,
 )
 import json, hashlib, itertools, time, os
 

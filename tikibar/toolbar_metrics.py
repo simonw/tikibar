@@ -6,7 +6,7 @@ import re
 
 from django.core.cache import cache
 
-from common.feature_flags.middleware import get_current_request
+from .middleware import get_current_request
 from .utils import (
     get_tiki_token_or_false,
     TIKIBAR_DATA_STORAGE_TIMEOUT,
