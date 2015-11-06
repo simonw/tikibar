@@ -1,16 +1,16 @@
-Simon Willison
-Natalie Downe
-Philip James
-Brandon Hamric
-Toph Burns
-Kevin Stone
-Parris Khachi
-Asheesh Laroia
-Adam Sussman
-Andrew Godwin
-Eyal Reuveni
-David Cooper
-Martin B
-Gabriel F
-Thomas Insam
-Ashwini Oruganti
+ - Simon Willison
+ - Natalie Downe
+ - Philip James
+ - Brandon Hamric
+ - Toph Burns
+ - Kevin Stone
+ - Parris Khachi
+ - Asheesh Laroia
+ - Adam Sussman
+ - Andrew Godwin
+ - Eyal Reuveni
+ - David Cooper
+ - Martin B
+ - Gabriel F
+ - Thomas Insam
+ - Ashwini Oruganti
