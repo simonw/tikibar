@@ -1,10 +1,12 @@
 import os
 import uuid
+import urlparse
 import logging
 from functools import wraps
 
 from gargoyle import gargoyle
 from django.conf import settings
+from django.http import HttpResponse, HttpResponsePermanentRedirect, Http404
 
 TIKIBAR_DATA_STORAGE_TIMEOUT = 3000 # time to store cache data
 TIKI_COOKIE = 'tikibar_active'
@@ -105,12 +107,16 @@ def set_tikibar_active_on_response(response, request):
     # First, generate a token. We'll use this in memcached as the identifier
     # for this site visitor's data in the tikibar.
     token_value = _create_random_token()
-
     # We store this token, plus Django secure-cookie signing metadata, in the
     # response's cookie set. We set the "secure" property to indicate that
-    response.set_signed_cookie(TIKI_COOKIE, token_value, domain=settings.EBDOMAIN, secure=False)
+    response.set_signed_cookie(
+        TIKI_COOKIE,
+        token_value,
+        domain=settings.TIKIBAR_SETTINGS.get('domain'),
+        secure=False,
+    )
 
-    if request.is_secure():
+    if request.is_secure() or settings.DEBUG:
         response.set_signed_cookie(
             TIKIBAR_VIEW_COOKIE_NAME,
             salt=TIKI_SALT_HTTPS,
@@ -144,7 +150,7 @@ def _should_collect_tiki_data_for_request(request):
             max_age=TIKI_COOKIE_DISABLED_EXPIRATION,
         )
 
-        for path in settings.TIKIBAR_PATH_BLACKLIST:
+        for path in settings.TIKIBAR_SETTINGS.get('blacklist'):
             if request.path.startswith(path):
                 request._collect_tikibar_data_for_request = False
         if enabled_cookie and enabled_cookie != TIKIBAR_DISABLED_STRING:
@@ -172,18 +178,20 @@ def find_eventbrite_subpath(full_path):
     full_path_abs = os.path.realpath(full_path)
 
     # Then, find absolute path of current releases, etc
-    codebase_top_level_abs = os.path.realpath(os.environ['EB_DIR'])
+    filepath = os.environ.get('EB_DIR')
+    if filepath:
+        codebase_top_level_abs = os.path.realpath(os.environ.get('EB_DIR'))
 
-    # Make sure we're where we think we are and subtract
-    if full_path_abs.startswith(codebase_top_level_abs):
-        return full_path_abs[len(codebase_top_level_abs) + 1:]
+        # Make sure we're where we think we are and subtract
+        if full_path_abs.startswith(codebase_top_level_abs):
+            return full_path_abs[len(codebase_top_level_abs) + 1:]
 
-    # But if we're not, at least log an error
-    logging.warn(
-        "Tikibar: View filepath not as expected %s %s",
-        full_path_abs,
-        codebase_top_level_abs,
-    )
+        # But if we're not, at least log an error
+        logging.warn(
+            "Tikibar: View filepath not as expected %s %s",
+            full_path_abs,
+            codebase_top_level_abs,
+        )
 
     return ''
 
@@ -207,17 +215,19 @@ def ssl_required(function):
         def _wrapped_view(request, *args, **kwargs):
             if request.is_secure():
                 return view_func(request, *args, **kwargs)
-
-            parsed = urlparse.urlparse(request.build_absolute_uri())
-            https_url = urlparse.urlunparse((
-                'https',
-                parsed.netloc,
-                parsed.path,
-                parsed.params,
-                parsed.query,
-                parsed.fragment
-            ))
-            return HttpResponsePermanentRedirect(https_url)
+            if not settings.DEBUG:
+                parsed = urlparse.urlparse(request.build_absolute_uri())
+                https_url = urlparse.urlunparse((
+                    'https',
+                    parsed.netloc,
+                    parsed.path,
+                    parsed.params,
+                    parsed.query,
+                    parsed.fragment
+                ))
+                return HttpResponsePermanentRedirect(https_url)
+            else:
+                return view_func(request, *args, **kwargs)
 
         return wraps(view_func)(_wrapped_view)
 

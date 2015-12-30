@@ -34,4 +34,3 @@ def swap_fields(sql):
             #r'<strong>FROM'
             )
     return re.sub(expr, subs, sql)
-

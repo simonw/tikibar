@@ -49,7 +49,8 @@ class SetCorrelationIDMiddleware(object):
 class TikibarMiddleware(object):
 
     def process_request(self, request):
-
+        if not hasattr(request, 'req_start'):
+            request.req_start = time.time()
         # set the request on tikibar's context
         set_current_request(request)
         return None
@@ -87,8 +88,11 @@ class TikibarMiddleware(object):
                 )
                 # TODO: Figure out a staticfiles implementation that
                 # works for this.
+                script_str = '<script>window.TIKI_PROTOCOL = "{protocol}";</script>\n'.format(
+                    protocol='http' if (settings.DEBUG and not request.is_secure()) else 'https'
+                )
                 with open(os.path.join(os.path.dirname(__file__), 'static/js/tikibar.js'), 'r') as js:
-                    script_str = '<script type="text/javascript" charset="utf-8">{}</script>'.format(
+                    script_str += '<script type="text/javascript" charset="utf-8">{}</script>'.format(
                             js.read().encode('utf-8')
                         )
                     content = content.replace(
@@ -129,7 +133,7 @@ class TikibarMiddleware(object):
                     TIKIBAR_DATA_STORAGE_TIMEOUT,
                 ))
         else:
-            if request.is_secure():
+            if request.is_secure() or settings.DEBUG:
                 if _should_show_tikibar_for_request(request):
                     set_tikibar_active_on_response(response, request)
 

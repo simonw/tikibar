@@ -53,7 +53,8 @@ jQuery(function($) {
         $(attach).css({
             position: 'absolute',
             width: '100%',
-            top: '60px'
+            top: '60px',
+            margin: 0
         });
         div.css({
             marginTop: '-60px'
@@ -110,7 +111,7 @@ jQuery(function($) {
 
     TikibarHost.prototype.get_tikibar_url = function() {
         var correlation_id = document.getElementsByName('correlation_id')[0].getAttribute('value');
-        var url = 'https://' + location.host + '/tikibar/?correlation_id=' + correlation_id + '&render=1&run_js=1';
+        var url = window.TIKI_PROTOCOL + '://' + location.host + '/tikibar/?correlation_id=' + correlation_id + '&render=1&run_js=1';
         return url;
     };
 
