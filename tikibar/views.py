@@ -154,34 +154,15 @@ def tikibar(request):
 
         # Add funky slashes to the template paths
         templates = []
-        for tmpl in data.get('django_template_load', []):
-            # There's probably a better to selectively prepend the correct directory.
-            template_name = tmpl[0]
-            if template_name[0] != '/':
-                template_name = '/' + template_name
-            if 'templates' not in template_name:
-                filepath = 'django/templates' + template_name
-            else:
-                filepath = 'django' + template_name
+        for template_item in data.get('templates', []):
             templates.append({
-                'filepath': filepath,
-                'timing': tmpl[1],
-                'filepath_with_slashes': slasherize(filepath),
+                'filepath': template_item[0],
+                'timing': template_item[1],
+                'filepath_with_slashes': slasherize(template_item[0]),
             })
-        for tmpl in data.get('core_template_render', []):
-            filepath = 'django/templates_core/' + tmpl[0]
-            templates.append({
-                'filepath': filepath,
-                'timing': tmpl[1],
-                'filepath_with_slashes': slasherize(filepath),
-            })
-        for tmpl in data.get('handlebars_template_render', []):
-            filepath = 'django/media/django/js/' + tmpl[0]
-            templates.append({
-                'filepath': filepath,
-                'timing': tmpl[1],
-                'filepath_with_slashes': slasherize(filepath),
-            })
+            # TODO: add django/templates_core and django/media/django/js/ to
+            # correct call sites for 'core_template_render' and 
+            # 'handlebars_template_render'
         templates.sort(key = lambda x: x['timing']['start'])
         data['templates'] = templates
 
@@ -240,7 +221,7 @@ def tikibar_off(request):
         raise Http404, 'Tikibar is turned off'
     if request.method == 'POST':
         response = HttpResponse("""
-            Tikibar is now off<script>window.parent.postMessage(JSON.stringify({'tiki_msg_type': 'hide'}), '*');</script>
+            Tikibar is now off <a href="/">Go home</a><script>window.parent.postMessage(JSON.stringify({'tiki_msg_type': 'hide'}), '*');</script>
         """)
         # response.delete_cookie('tikibar_active')
         set_tikibar_disabled_by_user(response)
@@ -282,12 +263,15 @@ def set_token_cross_domain(request):
 
 @ssl_required
 def tikibar_set_for_api_domain(request):
+    if not settings.TIKIBAR_SETTINGS.get('api_domain'):
+        raise Http404, 'No API domain defined'
     if not tikibar_feature_flag_enabled(request):
         raise Http404, 'Tikibar is turned off'
     if not request.user or not request.user.is_staff:
         return HttpResponse('You must be signed in as staff')
-    api_domain = settings.EBAPIDOMAIN
     nonce = os.urandom(16).encode('hex')
     key = 'tikibar-nonce:%s' % nonce
     signer = signing.TimestampSigner()
-    return HttpResponseRedirect('https://%s/tikibar/set-token/?nonce=%s' % (api_domain, signer.sign(key)))
+    return HttpResponseRedirect('https://%s/tikibar/set-token/?nonce=%s' % (
+        settings.TIKIBAR_SETTINGS.get('api_domain'), signer.sign(key))
+    )

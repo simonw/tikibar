@@ -18,9 +18,6 @@ from django.contrib import admin
 from tikibar import urls as tikibar_urls
 from events.views import HomeView
 
-import gargoyle
-gargoyle.autodiscover()
-
 urlpatterns = [
     url(r'^admin/', include(admin.site.urls)),
     url(r'^tikibar/', include(tikibar_urls)),

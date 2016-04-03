@@ -4,7 +4,6 @@ import urlparse
 import logging
 from functools import wraps
 
-from gargoyle import gargoyle
 from django.conf import settings
 from django.http import HttpResponse, HttpResponsePermanentRedirect, Http404
 
@@ -68,7 +67,15 @@ def get_tiki_token_or_false_for_tikibar_view(request):
 
 
 def tikibar_feature_flag_enabled(request):
-    return gargoyle.is_active(settings.TIKIBAR, request)
+    try:
+        from gargoyle import gargoyle
+        return gargoyle.is_active(settings.TIKIBAR, request)
+    except ImportError:
+        if hasattr(settings, 'ENABLE_TIKIBAR'):
+            return settings.ENABLE_TIKIBAR
+        if settings.DEBUG:
+            return settings.DEBUG
+    return False
 
 
 def get_tiki_token_or_false(request):
@@ -166,7 +173,10 @@ def _should_collect_tiki_data_for_request(request):
 def _should_show_tikibar_for_request(request):
     # Cache the value of this on the request, so it isn't calculated every time.
     if not hasattr(request, '_show_tikibar_for_request'):
-        if request._collect_tikibar_data_for_request:
+        if (
+            hasattr(request, '_collect_tikibar_data_for_request') 
+            and request._collect_tikibar_data_for_request
+        ):
             request._show_tikibar_for_request = tikibar_feature_flag_enabled(request)
         else:
             request._show_tikibar_for_request = False
@@ -232,3 +242,5 @@ def ssl_required(function):
         return wraps(view_func)(_wrapped_view)
 
     return decorator(function)
+
+

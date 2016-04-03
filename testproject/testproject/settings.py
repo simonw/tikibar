@@ -38,7 +38,6 @@ INSTALLED_APPS = (
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'events',
-    'gargoyle',
     'tikibar',
 )
 
@@ -77,6 +76,7 @@ WSGI_APPLICATION = 'testproject.wsgi.application'
 
 TIKIBAR_SETTINGS = {
     'blacklist': [],
+    'api_domain': '',
 }
 
 
@@ -109,13 +109,3 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/1.8/howto/static-files/
 
 STATIC_URL = '/static/'
-
-TIKIBAR = 'tikibar'
-
-GARGOYLE_SWITCH_DEFAULTS = {
-    'tikibar': {
-        'label': 'Tikibar',
-        'description': 'Enable the tikibar debugging tool',
-        'is_active': False,
-    }
-}
