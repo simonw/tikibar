@@ -102,42 +102,33 @@ def tikibar(request):
 
         total_time = data['total_time']['duration']
 
-        soa = {}
-        total_soa_time = 0
-
-        for service, timing in data.get('soa', []):
-            soa[service] = timing['duration']
-            total_soa_time += soa[service]
-
         queries = []
-
-        for query_type, sql, timing in data.get('sql_query', []):
-            queries.append({
-                'sql': reformat_sql(sql),
-                'type': query_type,
-                'timing': timing,
+        bars = []
+        total_timing_breakdown = {}
+        other_time = total_time
+        total_query_time = 0.0
+        for metric_type in data.get('queries', {}):
+            metric_timing = 0.0
+            for query_type, val, needs_format, timing in data.get('queries').get(metric_type, []):
+                if needs_format:
+                    val = reformat_sql(val)
+                queries.append({
+                    'sql': val,
+                    'type': query_type,
+                    'timing': timing,
+                })
+                metric_timing += timing['duration']
+            bars.append({
+                'name': metric_type,
+                'ms': metric_timing,
             })
-
-        for cql, timing in data.get('cassandra_cql', []):
-            queries.append({
-                'sql': reformat_sql(cql),
-                'type': 'cassandra',
-                'timing': timing,
-            })
-        for query, timing in data.get('solr', []):
-            queries.append({
-                'sql': repr(query),
-                'type': 'solr',
-                'timing': timing,
-            })
-        sum_sql = sum([q['timing']['duration'] for q in queries])
-
-        for service, timing in data.get('soa', []):
-            queries.append({
-                'sql': service,
-                'type': 'soa',
-                'timing': timing,
-            })
+            total_timing_breakdown[metric_type] = metric_timing
+            other_time = other_time - metric_timing
+            total_query_time += metric_timing
+        bars.append({
+            'name': 'Other',
+            'ms': other_time
+        })
 
         queries.sort(key=lambda x: x['timing']['start'])
         # Next annotate queries with the visual styling information we need
@@ -145,12 +136,14 @@ def tikibar(request):
         for query in queries:
             query['bar'] = {}
             query['bar']['left'] = left
-            query['bar']['width'] = (query['timing']['duration'] / (sum_sql + total_soa_time)) * 100
+            query['bar']['width'] = (query['timing']['duration'] / (total_query_time)) * 100
             left += query['bar']['width']
             query['color'] = hashlib.md5(smart_bytes(query['sql'])).hexdigest()[:6]
 
         data['queries'] = queries
-        data['sum_sql'] = sum_sql
+        data['sum_sql'] = total_query_time
+        data['source_control_url'] = settings.TIKIBAR_SETTINGS.get('source_control_url')
+        data['splunk_url'] = settings.TIKIBAR_SETTINGS.get('splunk_url')
 
         # Add funky slashes to the template paths
         templates = []
@@ -160,26 +153,9 @@ def tikibar(request):
                 'timing': template_item[1],
                 'filepath_with_slashes': slasherize(template_item[0]),
             })
-            # TODO: add django/templates_core and django/media/django/js/ to
-            # correct call sites for 'core_template_render' and 
-            # 'handlebars_template_render'
         templates.sort(key = lambda x: x['timing']['start'])
         data['templates'] = templates
 
-        # Colourful bars - currently just SQL, SOA calls, and Other
-        bars = []
-        bars.append({
-            'name': 'SQL',
-            'ms': sum_sql
-        })
-        bars.append({
-            'name': 'SOA calls',
-            'ms': total_soa_time,
-        })
-        bars.append({
-            'name': 'Other',
-            'ms': (total_time - sum_sql - total_soa_time),
-        })
         nextcol = itertools.cycle(TIKI_BAR_COLORS)
         for bar in bars:
             bar['color'] = next(nextcol)

@@ -183,14 +183,14 @@ def _should_show_tikibar_for_request(request):
     return request._show_tikibar_for_request
 
 
-def find_eventbrite_subpath(full_path):
+def find_view_subpath(full_path):
     # First, find the absolute path of the full path
     full_path_abs = os.path.realpath(full_path)
 
     # Then, find absolute path of current releases, etc
-    filepath = os.environ.get('EB_DIR')
+    filepath = settings.TIKIBAR_SETTINGS.get('filepath')
     if filepath:
-        codebase_top_level_abs = os.path.realpath(os.environ.get('EB_DIR'))
+        codebase_top_level_abs = os.path.realpath(filepath)
 
         # Make sure we're where we think we are and subtract
         if full_path_abs.startswith(codebase_top_level_abs):

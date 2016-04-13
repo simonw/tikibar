@@ -26,12 +26,12 @@
         <h3>Templates</h3>
 
         {% if tiki.view %}
-            <p>Python view <strong>{{ tiki.view }}</strong> in <a href="https://github.com/eventbrite/core/blob/{{ tiki.release_hash }}/{{ tiki.view_filepath }}" class="tiki-request">{{ tiki.view_filepath_with_slashes|safe }}</a></p>
+            <p>Python view <strong>{{ tiki.view }}</strong> in <a href="{{ tiki.source_control_url }}/blob/{{ tiki.release_hash }}/{{ tiki.view_filepath }}" class="tiki-request">{{ tiki.view_filepath_with_slashes|safe }}</a></p>
         {% endif %}
 
         <ul>
         {% for template in tiki.templates %}
-            <li class="tiki-request">{{ template.timing.duration|floatformat:2 }}<strong class="tiki-qualifier">ms</strong> <a href="https://github.com/eventbrite/core/blob/{{ tiki.release_hash }}/{{ template.filepath }}">{{ template.filepath_with_slashes|safe }}</a></li>
+            <li class="tiki-request">{{ template.timing.duration|floatformat:2 }}<strong class="tiki-qualifier">ms</strong> <a href="{{ tiki.source_control_url }}/blob/{{ tiki.release_hash }}/{{ template.filepath }}">{{ template.filepath_with_slashes|safe }}</a></li>
         {% endfor %}
         </ul>
     {% endif %}

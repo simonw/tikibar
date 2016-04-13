@@ -77,6 +77,7 @@ WSGI_APPLICATION = 'testproject.wsgi.application'
 TIKIBAR_SETTINGS = {
     'blacklist': [],
     'api_domain': '',
+    'filepath': 
 }
 
 

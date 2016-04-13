@@ -738,7 +738,7 @@ html {
 
     <div class="tikibasement" id="tiki-sql-queries">
 
-        <p>Total time in SQL: <strong>{{ tiki.sum_sql|floatformat:2 }}</strong>ms</p>
+        <p>Total time in queries: <strong>{{ tiki.sum_sql|floatformat:2 }}</strong>ms</p>
 
         <table cellspacing="0">
             <thead>
@@ -773,10 +773,10 @@ html {
 
     <div class="tikibasement" id="tiki-templates">
         <h2>Templates</h2>
-        <p>Python view <strong>{{ tiki.view }}</strong> in <a href="https://github.com/eventbrite/core/blob/{{ tiki.release_hash }}/{{ tiki.view_filepath }}" class="tiki-request">{{ tiki.view_filepath_with_slashes|safe }}</a></p>
+        <p>Python view <strong>{{ tiki.view }}</strong> in <a href="{{ tiki.source_control_url }}/blob/{{ tiki.release_hash }}/{{ tiki.view_filepath }}" class="tiki-request">{{ tiki.view_filepath_with_slashes|safe }}</a></p>
         <ul>
         {% for template in tiki.templates %}
-            <li class="tiki-request">{{ template.timing.duration|floatformat:2 }}<strong class="tiki-qualifier">ms</strong> <a href="https://github.com/eventbrite/core/blob/{{ tiki.release_hash }}/{{ template.filepath }}">{{ template.filepath_with_slashes|safe }}</a></li>
+            <li class="tiki-request">{{ template.timing.duration|floatformat:2 }}<strong class="tiki-qualifier">ms</strong> <a href="{{ tiki.source_control_url }}/blob/{{ tiki.release_hash }}/{{ template.filepath }}">{{ template.filepath_with_slashes|safe }}</a></li>
         {% endfor %}
         </ul>
     </div><!-- /.tikibasement -->
@@ -832,9 +832,9 @@ html {
         <h2>Tiki settings</h2>
         <p><a href="/tikibar/?correlation_id={{ tiki.correlation_id }}&amp;render=1">Export this bar</a> / <a href="/tikibar/?correlation_id={{ tiki.correlation_id }}">as JSON</a></p>
 
-        <p>Correlation ID: <strong>{{ tiki.correlation_id }}</strong> (<a href="https://eventbrite.splunkcloud.com/en-US/app/search/search?q=search%20index%3Dweb_analytics%20correlation_id%3D{{ tiki.correlation_id }}&earliest=-15m&latest=now">Splunk logs</a>)</p>
+        <p>Correlation ID: <strong>{{ tiki.correlation_id }}</strong> {% if tiki.splunk_url %}(<a href="{{ tiki.splunk_url }}{{ tiki.correlation_id }}">Splunk logs</a>){% endif %}</p>
 
-        <p>Release: <a href="https://github.com/eventbrite/core/tree/{{ tiki.release_hash }}">{{ tiki.release }}</a></p>
+        <p>Release: <a href="{{ tiki.source_control_url }}/tree/{{ tiki.release_hash }}">{{ tiki.release }}</a></p>
         <form action="/tikibar/off/" method="post">
             {% csrf_token %}
             <p>
