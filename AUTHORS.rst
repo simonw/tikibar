@@ -1,6 +1,7 @@
 - Simon Willison
 - Natalie Downe
 - Philip James
+- Steve French
 - Brandon Hamric
 - Toph Burns
 - Kevin Stone
