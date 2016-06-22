@@ -72,7 +72,6 @@ function addClientsideProfiling(timing) {
     var page_load_time = timing.domComplete - timing.responseStart;
     jQuery('.tiki-page-load-time').text(page_load_time);
     jQuery('.tiki-js-client-render-time').css('display', 'block');
-    transmitSize();
 }
 
 // Client-side performance monitoring
@@ -182,7 +181,6 @@ function transmitSize() {
     }
 }
 jQuery(function($) {
-    window.onresize = jQuery.debounce(100, transmitSize);
     transmitSize();
     jQuery(window).load(transmitSize); // For Mobile Safari
 
