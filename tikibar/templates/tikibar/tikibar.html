@@ -716,7 +716,9 @@ html {
     <div class="tikibasement" id="tiki-server-time">
         <h2>Server render time</h2>
 
-        <p>Total server render time: <strong>{{ tiki.total_time.duration|floatformat:0 }}</strong><span class="tiki-qualifier">ms</span></p>
+        <p>Total server render time: <strong>{{ tiki.total_time.duration|floatformat:0 }}</strong><span class="tiki-qualifier">ms</span>
+        User CPU: <strong>{{ tiki.user_cpu.duration|floatformat:0 }}</strong><span class="tiki-qualifier">ms</span>
+        System CPU: <strong>{{ tiki.system_cpu.duration|floatformat:0 }}</strong><span class="tiki-qualifier">ms</span></p>
 
         <div class="tiki-traffic">
             <div class="tiki-traffic-wrapper">

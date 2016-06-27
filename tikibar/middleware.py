@@ -1,5 +1,6 @@
 import json
 import os
+import resource
 import time
 import threading
 import uuid
@@ -49,8 +50,13 @@ class SetCorrelationIDMiddleware(object):
 class TikibarMiddleware(object):
 
     def process_request(self, request):
+        rusage = resource.getrusage(resource.RUSAGE_SELF)
         if not hasattr(request, 'req_start'):
             request.req_start = time.time()
+        if not hasattr(request, 'utime_start'):
+            request.utime_start = rusage.ru_utime
+        if not hasattr(request, 'stime_start'):
+            request.stime_start = rusage.ru_stime
         # set the request on tikibar's context
         set_current_request(request)
         return None
@@ -74,7 +80,10 @@ class TikibarMiddleware(object):
         toolbar = get_toolbar()
         if toolbar.is_active():
             setattr(request, 'req_stop', time.time())
+            rusage = resource.getrusage(resource.RUSAGE_SELF)
             toolbar.add_singular_metric('total_time', {'d': [request.req_start, request.req_stop]})
+            toolbar.add_singular_metric('user_cpu', {'d': [request.utime_start, rusage.ru_utime]})
+            toolbar.add_singular_metric('system_cpu', {'d': [request.stime_start, rusage.ru_stime]})
             toolbar.add_singular_metric('release', getattr(settings, 'RELEASE', 'master'))
             toolbar.add_singular_metric('request_path', request.get_full_path())
             toolbar.write_metrics()
