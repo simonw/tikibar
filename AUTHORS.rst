@@ -16,3 +16,4 @@
 - Thomas Insam
 - Ashwini Oruganti
 - Jennifer Wong
+- Brian Pitts
