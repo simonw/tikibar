@@ -131,13 +131,17 @@ def tikibar(request):
         })
 
         queries.sort(key=lambda x: x['timing']['start'])
+        first_query_start_ms = queries[0]['timing']['start'] * 1000
+        last_query_end_ms = queries[-1]['timing']['end'] * 1000
+        wall_clock_time_ms = last_query_end_ms - first_query_start_ms
         # Next annotate queries with the visual styling information we need
-        left = 0
         for query in queries:
             query['bar'] = {}
-            query['bar']['left'] = left
-            query['bar']['width'] = (query['timing']['duration'] / (total_query_time)) * 100
-            left += query['bar']['width']
+            time_before_query_ms = float(
+                query['timing']['start'] * 1000 - first_query_start_ms
+            )
+            query['bar']['left'] = (time_before_query_ms / wall_clock_time_ms) * 99
+            query['bar']['width'] = (query['timing']['duration'] / wall_clock_time_ms) * 99
             query['color'] = hashlib.md5(smart_bytes(query['sql'])).hexdigest()[:6]
 
         data['queries'] = queries
