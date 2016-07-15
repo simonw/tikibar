@@ -11,7 +11,7 @@ TIKIBAR_DATA_STORAGE_TIMEOUT = 3000 # time to store cache data
 TIKI_COOKIE = 'tikibar_active'
 TIKIBAR_VIEW_COOKIE_NAME = 'tikiok'
 TIKI_SALT_HTTPS = 'tiki-salt-extra-https'
-TIKI_COOKIE_ENABLED_EXPIRATION = 60 * 60  # 60 minutes, in seconds
+TIKI_COOKIE_ENABLED_EXPIRATION = 24 * 60 * 60  # 24 hours, in seconds
 TIKI_COOKIE_DISABLED_EXPIRATION = 30 * 24 * 60 * 60  # 30 days, in seconds
 TIKIBAR_DISABLED_STRING = 'disabled'
 
