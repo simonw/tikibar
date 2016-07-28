@@ -206,8 +206,8 @@ def find_view_subpath(full_path):
     return ''
 
 
-def format_analytics_action_for_tikibar(action_data):
-    """Given a dictionary of AnalyticsAction data, format it for presentation in tikibar.
+def format_dict_as_lines(action_data):
+    """Given a dictionary, format it as list of lines for presentation in tikibar.
     """
     data = []
     for key in sorted(action_data):
