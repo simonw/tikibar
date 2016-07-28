@@ -11,7 +11,7 @@ from .utils import (
     get_tiki_token_or_false,
     TIKIBAR_DATA_STORAGE_TIMEOUT,
     find_view_subpath,
-    format_analytics_action_for_tikibar,
+    format_dict_as_lines,
 )
 
 
@@ -99,15 +99,15 @@ class ToolbarMetricsContainer(object):
         self.metrics[metric_type] = data
 
     def add_analytics_action_metric(self, data):
-        """Add AnalyticsAction data to the toolbar.
+        """Add Analytics data to the toolbar.
 
         Parameters
         ----------
 
         - `data`: dict, should have an `actions` key whose value is a list
-            of length one containing the name of the Analytics Action.  Like:
+            of length one containing the name of the Analytics action.  Like:
 
-            {u'actions': [u'PageViewAction'],
+            {u'actions': [u'ActionName'],
             u'correlation_id': u'00587eca742111e584c50242ac11001b',
             u'path': u'/',
             ...
@@ -115,13 +115,13 @@ class ToolbarMetricsContainer(object):
 
         """
 
-        action_name = data.get('actions')
-        if action_name and isinstance(action_name, list):
-            action_name = action_name[0]
+        action_names = data.get('actions')
+        if action_names and isinstance(action_names, list):
+            action_name = action_names[0]
         # Format the analytics so they're easy to read in tikibar
         self.metrics['analytics'].append((
             action_name,
-            format_analytics_action_for_tikibar(data),
+            format_dict_as_lines(data),
         ))
         # Record a raw form of the data for JSON export
         self.metrics['analytics_raw'].append({action_name: data})
