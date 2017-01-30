@@ -7,6 +7,7 @@ import uuid
 
 from django.conf import settings
 from django.core.cache import cache
+from sampler import Sampler
 
 from .utils import (
     _should_show_tikibar_for_request,
@@ -50,6 +51,9 @@ class SetCorrelationIDMiddleware(object):
 class TikibarMiddleware(object):
 
     def process_request(self, request):
+        if tikibar_feature_flag_enabled(request):
+            request.sampler = Sampler()
+            request.sampler.start()
         rusage = resource.getrusage(resource.RUSAGE_SELF)
         if not hasattr(request, 'req_start'):
             request.req_start = time.time()
@@ -86,6 +90,8 @@ class TikibarMiddleware(object):
             toolbar.add_singular_metric('system_cpu', {'d': [request.stime_start, rusage.ru_stime]})
             toolbar.add_singular_metric('release', getattr(settings, 'RELEASE', 'master'))
             toolbar.add_singular_metric('request_path', request.get_full_path())
+            toolbar.add_stack_samples(request.sampler.output_stats())
+            request.sampler.stop()
             toolbar.write_metrics()
             if response.get('content-type', '').startswith('text/html')\
                     and response.content \

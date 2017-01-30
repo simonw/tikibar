@@ -91,7 +91,6 @@ class ToolbarMetricsContainer(object):
             needs_format=True,
         )
 
-
     def add_freeform_metric(self, metric_type, data):
         self.metrics[metric_type].append(data)
 
@@ -125,6 +124,9 @@ class ToolbarMetricsContainer(object):
         ))
         # Record a raw form of the data for JSON export
         self.metrics['analytics_raw'].append({action_name: data})
+
+    def add_stack_samples(self, samples):
+        self.metrics['stack_samples'] = samples
 
     def write_metrics(self):
         # If the metrics seem too long, start dropping parts to try and fit

@@ -556,6 +556,10 @@ html {
     margin-right: 0.5em;
 }
 
+#tikibar .tiki-sample li {
+    word-wrap: break-word;
+}
+
 #tikibar table {
     color: white;
     width: 100%;
@@ -716,6 +720,11 @@ html {
             <p id="tiki-js-ajax-counter">0</p>
         </a>
 
+        <a href="#tiki-stack-samples" class="tiki-set tiki-js-toggle">
+            <h2 class="tiki-set-header">Stack Samples</h2>
+            <p>{{ tiki.stack_samples|length }}</p>
+        </a>
+
         <a href="#tiki-settings" class="tiki-settings tiki-js-toggle">Settings</a>
     </div>
 
@@ -801,6 +810,15 @@ html {
         <ul>
         {% for action in tiki.analytics %}
             <li class="tiki-pair"><em>{{ action.0 }}</em> {{ action.1 |linebreaks }}</li>
+        {% endfor %}
+        </ul>
+    </div><!-- /.tikibasement -->
+
+    <div class="tikibasement" id="tiki-stack-samples">
+        <h2>Stack Samples</h2>
+        <ul>
+        {% for sample in tiki.stack_samples %}
+            <li class="tiki-sample">{{ sample }}</li>
         {% endfor %}
         </ul>
     </div><!-- /.tikibasement -->
