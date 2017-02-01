@@ -51,18 +51,21 @@ class SetCorrelationIDMiddleware(object):
 class TikibarMiddleware(object):
 
     def process_request(self, request):
-        if tikibar_feature_flag_enabled(request):
-            request.sampler = Sampler()
-            request.sampler.start()
-        rusage = resource.getrusage(resource.RUSAGE_SELF)
-        if not hasattr(request, 'req_start'):
-            request.req_start = time.time()
-        if not hasattr(request, 'utime_start'):
-            request.utime_start = rusage.ru_utime
-        if not hasattr(request, 'stime_start'):
-            request.stime_start = rusage.ru_stime
+        from .toolbar_metrics import get_toolbar
         # set the request on tikibar's context
         set_current_request(request)
+        if tikibar_feature_flag_enabled(request):
+            toolbar = get_toolbar()
+            if toolbar.is_active():
+                request.sampler = Sampler()
+                request.sampler.start()
+                rusage = resource.getrusage(resource.RUSAGE_SELF)
+                if not hasattr(request, 'req_start'):
+                    request.req_start = time.time()
+                if not hasattr(request, 'utime_start'):
+                    request.utime_start = rusage.ru_utime
+                if not hasattr(request, 'stime_start'):
+                    request.stime_start = rusage.ru_stime
         return None
 
     def process_view(self, request, view_func, view_args, view_kwargs):
