@@ -35,7 +35,7 @@ class Sampler(object):
     stack every `interval` seconds and keeps track of counts by frame. Because
     this uses signals, it only works on the main thread.
     """
-    def __init__(self, interval=0.005):
+    def __init__(self, interval=0.01):
         self.interval = interval
         self._started = None
         self._stack_counts = collections.defaultdict(int)
