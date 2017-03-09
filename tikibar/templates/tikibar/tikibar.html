@@ -720,10 +720,12 @@ html {
             <p id="tiki-js-ajax-counter">0</p>
         </a>
 
+        {% if tiki.stack_samples %}
         <a href="#tiki-stack-samples" class="tiki-set tiki-js-toggle">
             <h2 class="tiki-set-header">Stack Samples</h2>
             <p>{{ tiki.stack_samples|length }}</p>
         </a>
+        {% endif %}
 
         <a href="#tiki-settings" class="tiki-settings tiki-js-toggle">Settings</a>
     </div>
@@ -814,6 +816,7 @@ html {
         </ul>
     </div><!-- /.tikibasement -->
 
+    {% if tiki.stack_samples %}
     <div class="tikibasement" id="tiki-stack-samples">
         <h2>Stack Samples</h2>
         <ul>
@@ -822,6 +825,7 @@ html {
         {% endfor %}
         </ul>
     </div><!-- /.tikibasement -->
+    {% endif %}
 
     <div class="tikibasement" id="tiki-ajax-requests">
         <h2 id="tiki-ajax-requests-h2" style="display:none">Ajax requests</h2>

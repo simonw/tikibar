@@ -57,8 +57,9 @@ class TikibarMiddleware(object):
         if tikibar_feature_flag_enabled(request):
             toolbar = get_toolbar()
             if toolbar.is_active():
-                request.sampler = Sampler()
-                request.sampler.start()
+                if settings.TIKIBAR_SETTINGS.get('enable_profiler'):
+                    request.sampler = Sampler()
+                    request.sampler.start()
                 rusage = resource.getrusage(resource.RUSAGE_SELF)
                 if not hasattr(request, 'req_start'):
                     request.req_start = time.time()
@@ -93,8 +94,9 @@ class TikibarMiddleware(object):
             toolbar.add_singular_metric('system_cpu', {'d': [request.stime_start, rusage.ru_stime]})
             toolbar.add_singular_metric('release', getattr(settings, 'RELEASE', 'master'))
             toolbar.add_singular_metric('request_path', request.get_full_path())
-            toolbar.add_stack_samples(request.sampler.output_stats())
-            request.sampler.stop()
+            if settings.TIKIBAR_SETTINGS.get('enable_profiler'):
+                toolbar.add_stack_samples(request.sampler.output_stats())
+                request.sampler.stop()
             toolbar.write_metrics()
             if response.get('content-type', '').startswith('text/html')\
                     and response.content \
