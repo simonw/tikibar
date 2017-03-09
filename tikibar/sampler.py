@@ -69,8 +69,8 @@ class Sampler(object):
             return []
         ordered_stacks = sorted(self._stack_counts.items(),
                                 key=lambda kv: kv[1], reverse=True)
-        lines = ['{} {}'.format(frame, count) for frame, count in ordered_stacks]
-        return lines
+        lines = ['"{} {}"'.format(frame, count) for frame, count in ordered_stacks]
+        return ','.join(lines)
 
     def reset(self):
         self._started = time.time()
