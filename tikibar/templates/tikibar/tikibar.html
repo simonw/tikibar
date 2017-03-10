@@ -9,13 +9,24 @@
     <script src="https://cdn.rawgit.com/spiermar/d3-flame-graph/c0e6520683091c6922397e1fb8b7c7a7b6387d49/src/d3.flameGraph.js"></script>
     <link rel="stylesheet" href="https://cdn.rawgit.com/spiermar/d3-flame-graph/c0e6520683091c6922397e1fb8b7c7a7b6387d49/src/d3.flameGraph.css" />
     <style type="text/css">
-    #tiki-flame-graph-chart {
+    #tiki-flame-graph-container {
         background: #fff;
         padding: 10px;
         border-radius: 5px;
     }
     .d3-flame-graph-tip {
         z-index: 9999;
+    }
+    .controls {
+        text-align: right;
+    }
+    .controls .control-group {
+        margin-left: 10px;
+        display: inline-block;
+    }
+    .controls .control-group input {
+        margin: 5px;
+        padding: 5px;
     }
     </style>
 {% endif %}
@@ -836,7 +847,19 @@ html {
     {% if tiki.stack_samples %}
     <div class="tikibasement" id="tiki-flame-graph">
         <h2>Flame Graph</h2>
-        <div id="tiki-flame-graph-chart"></div>
+        <div id="tiki-flame-graph-container">
+            <div class="controls">
+                <div class="control-group">
+                    <input id="flame-reset-button" type="button" value="Reset Zoom" />
+                </div>
+                <div class="control-group">
+                    <input id="term" type="text" />
+                    <input id="flame-search-button" type="button" value="Search" />
+                    <input id="flame-clear-button" type="button" value="Clear" />
+                </div>
+            </div>
+            <div id="tiki-flame-graph-chart"></div>
+        </div>
     </div><!-- /.tikibasement -->
     <script type="text/javascript">
 
@@ -911,6 +934,23 @@ html {
     d3.select("#tiki-flame-graph-chart")
         .datum(root.serialize())
         .call(flameGraph);
+   
+    // Event handlers
+    function flameGraphReset() {
+        flameGraph.resetZoom();
+    }
+    function flameGraphClear(e) {
+        flameGraph.clear(e);
+        $('#term').val('');
+    }
+    function flameGraphSearch() {
+        flameGraph.search($('#term').val());
+    }
+    $(document).ready(function() {
+        $('#flame-reset-button').click(flameGraphReset);
+        $('#flame-clear-button').click(flameGraphClear);
+        $('#flame-search-button').click(flameGraphSearch);
+    });
 
     </script>
     {% endif %}
