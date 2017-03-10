@@ -62,8 +62,8 @@ class TikibarMiddleware(object):
                     request.sampler = Sampler(interval=profile_interval)
                     request.sampler.start()
                 rusage = resource.getrusage(resource.RUSAGE_SELF)
-                if not hasattr(request, 'req_start'):
-                    request.req_start = time.time()
+                if not hasattr(request, 'req_start_time'):
+                    request.req_start_time = time.time()
                 if not hasattr(request, 'utime_start'):
                     request.utime_start = rusage.ru_utime
                 if not hasattr(request, 'stime_start'):
@@ -88,9 +88,9 @@ class TikibarMiddleware(object):
 
         toolbar = get_toolbar()
         if toolbar.is_active():
-            setattr(request, 'req_stop', time.time())
+            setattr(request, 'req_stop_time', time.time())
             rusage = resource.getrusage(resource.RUSAGE_SELF)
-            toolbar.add_singular_metric('total_time', {'d': [request.req_start, request.req_stop]})
+            toolbar.add_singular_metric('total_time', {'d': [request.req_start_time, request.req_stop_time]})
             toolbar.add_singular_metric('user_cpu', {'d': [request.utime_start, rusage.ru_utime]})
             toolbar.add_singular_metric('system_cpu', {'d': [request.stime_start, rusage.ru_stime]})
             toolbar.add_singular_metric('release', getattr(settings, 'RELEASE', 'master'))
@@ -122,7 +122,7 @@ class TikibarMiddleware(object):
                     )
                     response.content = content
 
-            request_duration = (request.req_stop - request.req_start)
+            request_duration = (request.req_stop_time - request.req_start_time)
             # And add the headers
             response['X-Tiki-Time'] = request_duration
             response['X-Correlation-ID'] = request.correlation_id
@@ -143,7 +143,7 @@ class TikibarMiddleware(object):
                 # JSON blob with metadata about request
                 current_list.append({
                     'd': request_duration,
-                    't': request.req_start,
+                    't': request.req_start_time,
                     'u': request.get_full_path(),
                     'c': request.correlation_id,
                     'v': request.method,
