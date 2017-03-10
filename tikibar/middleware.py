@@ -58,7 +58,8 @@ class TikibarMiddleware(object):
             toolbar = get_toolbar()
             if toolbar.is_active():
                 if settings.TIKIBAR_SETTINGS.get('enable_profiler'):
-                    request.sampler = Sampler()
+                    profile_interval = settings.TIKIBAR_SETTINGS.get('profile_interval', 0.01)
+                    request.sampler = Sampler(interval=profile_interval)
                     request.sampler.start()
                 rusage = resource.getrusage(resource.RUSAGE_SELF)
                 if not hasattr(request, 'req_start'):
