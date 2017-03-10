@@ -909,8 +909,8 @@ html {
 	}
 
     var root = new Node('root');
-    var regex = /(.*) (.*)/g;
     lines.map(function (val) {
+        var regex = /(.*) (.*)/g;
         var matches = regex.exec(val);
         if (matches)
             root.add(matches[1].split(";"), parseInt(matches[2]));
