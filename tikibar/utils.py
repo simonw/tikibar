@@ -5,7 +5,7 @@ import logging
 from functools import wraps
 
 from django.conf import settings
-from django.http import HttpResponse, HttpResponsePermanentRedirect, Http404
+from django.http import HttpResponsePermanentRedirect
 
 TIKIBAR_DATA_STORAGE_TIMEOUT = 3000 # time to store cache data
 TIKI_COOKIE = 'tikibar_active'
@@ -174,7 +174,7 @@ def _should_show_tikibar_for_request(request):
     # Cache the value of this on the request, so it isn't calculated every time.
     if not hasattr(request, '_show_tikibar_for_request'):
         if (
-            hasattr(request, '_collect_tikibar_data_for_request') 
+            hasattr(request, '_collect_tikibar_data_for_request')
             and request._collect_tikibar_data_for_request
         ):
             request._show_tikibar_for_request = tikibar_feature_flag_enabled(request)
@@ -207,8 +207,7 @@ def find_view_subpath(full_path):
 
 
 def format_dict_as_lines(action_data):
-    """Given a dictionary, format it as list of lines for presentation in tikibar.
-    """
+    """Given a dictionary, format it as list of lines for presentation in tikibar."""
     data = []
     for key in sorted(action_data):
         data.append('{key}:{value}'.format(key=key, value=action_data[key]))
@@ -216,10 +215,7 @@ def format_dict_as_lines(action_data):
 
 
 def ssl_required(function):
-    """Decorator for SSL. If the request is not made over SSL,
-       redirect to SSL.
-
-    """
+    """Decorator for SSL. If the request is not made over SSL, redirect to SSL."""
     def decorator(view_func):
 
         def _wrapped_view(request, *args, **kwargs):
@@ -244,3 +240,19 @@ def ssl_required(function):
     return decorator(function)
 
 
+def get_metrics_list(correlation_id):
+    from django.core.cache import cache
+    counter_key = 'tikibar-counter:%s' % correlation_id
+    counter = cache.get(counter_key)
+    if counter is None:
+        return []
+    counter = int(counter)
+    keys = [
+        'tikibar:%s:%d' % (correlation_id, i)
+        for i in range(counter + 1)
+    ]
+    data = cache.get_many(keys)
+    metrics_list = []
+    for key in data:
+        metrics_list.extend(data[key])
+    return metrics_list

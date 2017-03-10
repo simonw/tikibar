@@ -1,8 +1,8 @@
-from collections import defaultdict
+from collections import defaultdict, namedtuple
 import importlib
 import inspect
-import logging
 import re
+import time
 
 from django.core.cache import cache
 
@@ -13,6 +13,27 @@ from .utils import (
     find_view_subpath,
     format_dict_as_lines,
 )
+
+
+MAX_SIZE_PER_CHUNK = 900 * 1024
+
+
+Metric = namedtuple('Metric', (
+    'timestamp', 'type', 'value', 'duration', 'props'
+))
+
+
+def publish_metrics_list(correlation_id, metrics_list):
+    counter_key = 'tikibar-counter:%s' % correlation_id
+    if cache.add(counter_key, '0', timeout=6000):
+        counter = 0
+    else:
+        counter = cache.incr(counter_key)
+    key = 'tikibar:%s:%d' % (correlation_id, counter)
+    # TODO: write out chunks of the list up to MAX_SIZE_PER_CHUNK
+    print 'publish_toolbar_metrics:'
+    cache.set(key, metrics_list)
+    print key, metrics_list
 
 
 def publish_toolbar_metrics(correlation_id, metrics):
@@ -49,6 +70,9 @@ class ToolbarMetricsContainer(object):
     max_size = 1000 * 1024
 
     def __init__(self, correlation_id, is_active=True):
+        print "ToolbarMetricsContainer: correlation_id=%s" % correlation_id
+        self.metrics_list = []
+        self.flushed_time = time.time()
         self.metrics = defaultdict(list)
         self.metrics['queries'] = defaultdict(list)
         self.correlation_id = correlation_id
@@ -73,12 +97,42 @@ class ToolbarMetricsContainer(object):
             find_view_subpath(filepath),
         )
 
+    def add_metric(self, metric):
+        self.metrics_list.append(metric)
+        # Force a write if it's been more than 1 second
+        if (time.time() - self.flushed_time) > 1.0:
+            publish_metrics_list(self.correlation_id, self.metrics_list)
+            self.metrics_list = []
+            self.flushed_time = time.time()
+
     def add_timed_metric(self, metric_type, val, start, stop):
         self.metrics[metric_type].append((val, {'d': (start, stop)}))
+        self.add_metric(
+            Metric(
+                timestamp=start,
+                type=metric_type,
+                value=val,
+                duration=stop - start,
+                props=None
+            )
+        )
 
     def add_query_metric(self, metric_type, query_type, val, start, stop, needs_format=False):
         self.metrics['queries'][metric_type].append(
             (query_type, val, needs_format, {'d': (start, stop)})
+        )
+        self.add_metric(
+            Metric(
+                timestamp=start,
+                type='query',
+                value=val,
+                duration=stop - start,
+                props={
+                    'metric_type': metric_type,
+                    'query_type': query_type,
+                    'needs_format': needs_format,
+                }
+            )
         )
 
     def add_sql_query_metric(self, query_type, val, start, stop):
@@ -91,12 +145,29 @@ class ToolbarMetricsContainer(object):
             needs_format=True,
         )
 
-
     def add_freeform_metric(self, metric_type, data):
         self.metrics[metric_type].append(data)
+        self.add_metric(
+            Metric(
+                timestamp=time.time(),
+                type=metric_type,
+                value=data,
+                duration=None,
+                props=None,
+            )
+        )
 
     def add_singular_metric(self, metric_type, data):
         self.metrics[metric_type] = data
+        self.add_metric(
+            Metric(
+                timestamp=time.time(),
+                type=metric_type,
+                value=data,
+                duration=None,
+                props=None,
+            )
+        )
 
     def add_analytics_action_metric(self, data):
         """Add Analytics data to the toolbar.
@@ -114,7 +185,6 @@ class ToolbarMetricsContainer(object):
             }
 
         """
-
         action_names = data.get('actions')
         if action_names and isinstance(action_names, list):
             action_name = action_names[0]
@@ -125,6 +195,18 @@ class ToolbarMetricsContainer(object):
         ))
         # Record a raw form of the data for JSON export
         self.metrics['analytics_raw'].append({action_name: data})
+        self.add_metric(
+            Metric(
+                timestamp=time.time(),
+                type='analytics',
+                value='%s: %s' % (action_name, format_dict_as_lines(data)),
+                duration=None,
+                props={
+                    'action_name': action_name,
+                    'data': data,
+                },
+            )
+        )
 
     def write_metrics(self):
         # If the metrics seem too long, start dropping parts to try and fit
@@ -146,3 +228,4 @@ class ToolbarMetricsContainer(object):
                 for query_type, val, needs_format, timing in self.metrics["queries"]["SQL"]
             ]
         publish_toolbar_metrics(self.correlation_id, self.metrics)
+        publish_metrics_list(self.correlation_id, self.metrics_list)

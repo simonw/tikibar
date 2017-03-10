@@ -12,8 +12,13 @@ from .utils import (
     tikibar_feature_flag_enabled,
     get_tiki_token_or_false_for_tikibar_view,
     ssl_required,
+    get_metrics_list,
 )
-import json, hashlib, itertools, time, os
+import json
+import hashlib
+import itertools
+import time
+import os
 
 from .sql_utils import reformat_sql
 
@@ -21,22 +26,59 @@ TIKI_ANGER_THRESHOLD = 500 # 500ms
 
 TIKI_BAR_COLORS = ['#8adb1e', '#1c4dcb', '#b21ccb', '#f53522', '#f5aa22', '#e7f021']
 
+
 def tiki_response(response):
     response['x-suppress-tikibar'] = '1'
     setattr(response, 'xframe_option', 'EXEMPT')
     return response
 
+
 @ssl_required
 def tikibar_settings(request):
     if not tikibar_feature_flag_enabled(request):
-        raise Http404, 'Tikibar is turned off'
+        raise Http404('Tikibar is turned off')
     if not request.user or not request.user.is_staff:
-        raise Http404, 'Staff required'
+        raise Http404('Staff required')
     is_active = bool(get_tiki_token_or_false(request))
     t = template.loader.get_template('tikibar/tikibar_settings.html')
     return HttpResponse(t.render(template.RequestContext(request, {
         'is_active': is_active,
     })))
+
+
+@ssl_required
+def tikibar_pollable_query_chart(request):
+    if not tikibar_feature_flag_enabled(request):
+        return tiki_response(HttpResponse('Tikibar is turned off'))
+    tiki_token = get_tiki_token_or_false_for_tikibar_view(request)
+    if not tiki_token:
+        return tiki_response(HttpResponse('No tiki-token!'))
+
+    correlation_id = request.GET.get('correlation_id', '')
+    if not correlation_id:
+        return tiki_response(HttpResponse(''))
+    counter = request.GET.get('counter')
+
+    current_counter = None
+    counter_key = 'tikibar-counter:%s' % correlation_id
+    current_counter = cache.get(counter_key)
+    if str(current_counter) == counter:
+        return tiki_response(HttpResponse(json.dumps({
+            'no_changes': 1
+        }, indent=2), content_type='application/json'))
+
+    metrics_list = get_metrics_list(correlation_id)
+
+    t = template.loader.get_template('tikibar/_queries.html')
+    return tiki_response(HttpResponse(json.dumps({
+        'html': t.render(
+            template.RequestContext(request, {
+                'tiki': {
+                    'query_bars': make_query_bars(metrics_list),
+                },
+            })),
+        'counter': current_counter,
+    }, indent=2), content_type='application/json'))
 
 
 @ssl_required
@@ -71,7 +113,17 @@ def tikibar(request):
     if not correlation_id:
         return tiki_response(HttpResponse(''))
 
-    data = cache.get('tikibar:%s' % correlation_id)
+    # Fetch data from multiple keys based on the counter
+    metrics_list = get_metrics_list(correlation_id)
+    data = cache.get('tikibar:%s' % correlation_id) or {}
+
+    data['metrics_list'] = metrics_list
+    query_bars = make_query_bars(metrics_list)
+    data['query_bars'] = query_bars
+
+    counter_key = 'tikibar-counter:%s' % correlation_id
+    current_counter = cache.get(counter_key)
+    data['current_counter'] = current_counter
 
     history_cache_key = 'tikibar:history:%s' % tiki_token
     request_history = json.loads(cache.get(history_cache_key) or '[]')
@@ -81,7 +133,10 @@ def tikibar(request):
     if data:
         data['correlation_id'] = correlation_id
         data['request_history'] = request_history
-        data['release_hash'] = data['release'].split('-')[-1]
+        try:
+            data['release_hash'] = data['release'].split('-')[-1]
+        except (AttributeError, KeyError):
+            data['release_hash'] = 'unknown'
 
         now = time.time()
         for row in data['request_history']:
@@ -89,63 +144,67 @@ def tikibar(request):
             row['ms'] = row['d'] * 1000
 
         # Massage data
-        def expand_durations(obj):
-            if isinstance(obj, dict) and obj.keys()[0] == 'd':
-                return duration(obj)
-            elif isinstance(obj, dict):
-                return dict([(key, expand_durations(value)) for key, value in obj.items()])
-            elif isinstance(obj, list) or isinstance(obj, tuple):
-                return [expand_durations(item) for item in obj]
-            else:
-                return obj
-        data = expand_durations(data)
+        # def expand_durations(obj):
+        #     if isinstance(obj, dict) and obj.keys()[0] == 'd':
+        #         return duration(obj)
+        #     elif isinstance(obj, dict):
+        #         return dict([(key, expand_durations(value)) for key, value in obj.items()])
+        #     elif isinstance(obj, list) or isinstance(obj, tuple):
+        #         return [expand_durations(item) for item in obj]
+        #     else:
+        #         return obj
+        # data = expand_durations(data)
 
-        total_time = data['total_time']['duration']
 
-        queries = []
-        bars = []
-        total_timing_breakdown = {}
-        other_time = total_time
-        total_query_time = 0.0
-        for metric_type in data.get('queries', {}):
-            metric_timing = 0.0
-            for query_type, val, needs_format, timing in data.get('queries').get(metric_type, []):
-                if needs_format:
-                    val = reformat_sql(val)
-                queries.append({
-                    'sql': val,
-                    'type': query_type,
-                    'timing': timing,
-                })
-                metric_timing += timing['duration']
-            bars.append({
-                'name': metric_type,
-                'ms': metric_timing,
-            })
-            total_timing_breakdown[metric_type] = metric_timing
-            other_time = other_time - metric_timing
-            total_query_time += metric_timing
-        bars.append({
-            'name': 'Other',
-            'ms': other_time
-        })
 
-        queries.sort(key=lambda x: x['timing']['start'])
-        first_query_start_ms = queries[0]['timing']['start'] * 1000
-        last_query_end_ms = queries[-1]['timing']['end'] * 1000
-        wall_clock_time_ms = last_query_end_ms - first_query_start_ms
-        # Next annotate queries with the visual styling information we need
-        for query in queries:
-            query['bar'] = {}
-            time_before_query_ms = float(
-                query['timing']['start'] * 1000 - first_query_start_ms
-            )
-            query['bar']['left'] = (time_before_query_ms / wall_clock_time_ms) * 99
-            query['bar']['width'] = (query['timing']['duration'] / wall_clock_time_ms) * 99
-            query['color'] = hashlib.md5(smart_bytes(query['sql'])).hexdigest()[:6]
+        # total_time = data['total_time']['duration']
 
-        data['queries'] = queries
-        data['sum_sql'] = total_query_time
+        # queries = []
+        # bars = []
+        # total_timing_breakdown = {}
+        # other_time = total_time
+        # total_query_time = 0.0
+        # for metric_type in data.get('queries', {}):
+        #     metric_timing = 0.0
+        #     for query_type, val, needs_format, timing in data.get('queries').get(metric_type, []):
+        #         if needs_format:
+        #             val = reformat_sql(val)
+        #         queries.append({
+        #             'sql': val,
+        #             'type': query_type,
+        #             'timing': timing,
+        #         })
+        #         metric_timing += timing['duration']
+        #     bars.append({
+        #         'name': metric_type,
+        #         'ms': metric_timing,
+        #     })
+        #     total_timing_breakdown[metric_type] = metric_timing
+        #     other_time = other_time - metric_timing
+        #     total_query_time += metric_timing
+        # bars.append({
+        #     'name': 'Other',
+        #     'ms': other_time
+        # })
+
+        # queries.sort(key=lambda x: x['timing']['start'])
+        # first_query_start_ms = queries[0]['timing']['start'] * 1000
+        # last_query_end_ms = queries[-1]['timing']['end'] * 1000
+        # wall_clock_time_ms = last_query_end_ms - first_query_start_ms
+        # # Next annotate queries with the visual styling information we need
+        # for query in queries:
+        #     query['bar'] = {}
+        #     time_before_query_ms = float(
+        #         query['timing']['start'] * 1000 - first_query_start_ms
+        #     )
+        #     query['bar']['left'] = (time_before_query_ms / wall_clock_time_ms) * 99
+        #     query['bar']['width'] = (query['timing']['duration'] / wall_clock_time_ms) * 99
+        #     query['color'] = hashlib.md5(smart_bytes(query['sql'])).hexdigest()[:6]
+
+        # data['queries'] = queries
+        # data['sum_sql'] = total_query_time
+
+
         data['source_control_url'] = settings.TIKIBAR_SETTINGS.get('source_control_url')
         data['splunk_url'] = settings.TIKIBAR_SETTINGS.get('splunk_url')
 
@@ -157,20 +216,22 @@ def tikibar(request):
                 'timing': template_item[1],
                 'filepath_with_slashes': slasherize(template_item[0]),
             })
-        templates.sort(key = lambda x: x['timing']['start'])
+        templates.sort(key=lambda x: x['timing']['start'])
         data['templates'] = templates
 
-        nextcol = itertools.cycle(TIKI_BAR_COLORS)
-        for bar in bars:
-            bar['color'] = next(nextcol)
-            bar['width'] = (bar['ms'] / total_time) * 100
-        data['bars'] = bars
+        # nextcol = itertools.cycle(TIKI_BAR_COLORS)
+        # for bar in bars:
+        #     bar['color'] = next(nextcol)
+        #     bar['width'] = (bar['ms'] / total_time) * 100
+        # data['bars'] = bars
 
         if data.get('view_filepath'):
             data['view_filepath_with_slashes'] = slasherize(data['view_filepath'])
 
-        if total_time > TIKI_ANGER_THRESHOLD:
-            data['angry'] = True
+        # if total_time > TIKI_ANGER_THRESHOLD:
+        #     data['angry'] = True
+
+    data['should_poll'] = bool(request.GET.get('should_poll'))
 
     if request.GET.get('render'):
         template_name = 'tikibar.html'
@@ -180,6 +241,7 @@ def tikibar(request):
         return tiki_response(HttpResponse(t.render(template.RequestContext(request, {'tiki': data}))))
     else:
         return tiki_response(HttpResponse(json.dumps(data, indent=2), content_type='application/json'))
+
 
 @ssl_required
 def tikibar_on(request):
@@ -195,13 +257,15 @@ def tikibar_on(request):
         t = template.loader.get_template('tikibar/tikibar_on.html')
         return HttpResponse(t.render(template.RequestContext(request, {})))
 
+
 @ssl_required
 def tikibar_off(request):
     if not tikibar_feature_flag_enabled(request):
-        raise Http404, 'Tikibar is turned off'
+        raise Http404('Tikibar is turned off')
     if request.method == 'POST':
         response = HttpResponse("""
             Tikibar is now off <a href="/">Go home</a><script>window.parent.postMessage(JSON.stringify({'tiki_msg_type': 'hide'}), '*');</script>
+            <img src="/tikibar/set-for-api-domain/?off=1" style="opacity: 0.01">
         """)
         # response.delete_cookie('tikibar_active')
         set_tikibar_disabled_by_user(response)
@@ -209,6 +273,7 @@ def tikibar_off(request):
     else:
         t = template.loader.get_template('tikibar/tikibar_off.html')
         return tiki_response(HttpResponse(t.render(template.RequestContext(request, {}))))
+
 
 def duration(obj):
     return {
@@ -231,27 +296,89 @@ def set_token_cross_domain(request):
         return HttpResponse('Could not set, no nonce')
     try:
         signer = signing.TimestampSigner()
-        key = signer.unsign(nonce, max_age=10).split(r'tikibar-nonce:')[1]
+        signer.unsign(nonce, max_age=10).split(r'tikibar-nonce:')[1]
         # We return a 1x1 transparent gif, since we're triggered by an <img src="">
         gif = "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7".decode('base64')
-        response = HttpResponse(gif, content_type = 'image/gif')
-        set_tikibar_active_on_response(response, request)
+        response = HttpResponse(gif, content_type='image/gif')
+        if request.GET.get('off'):
+            set_tikibar_disabled_by_user(response)
+        else:
+            set_tikibar_active_on_response(response, request)
         return response
-    except:
+    except signing.BadSignature:
         return HttpResponse('Could not set, invalid nonce')
 
 
 @ssl_required
 def tikibar_set_for_api_domain(request):
     if not settings.TIKIBAR_SETTINGS.get('api_domain'):
-        raise Http404, 'No API domain defined'
+        raise Http404('No API domain defined')
     if not tikibar_feature_flag_enabled(request):
-        raise Http404, 'Tikibar is turned off'
+        raise Http404('Tikibar is turned off')
     if not request.user or not request.user.is_staff:
         return HttpResponse('You must be signed in as staff')
     nonce = os.urandom(16).encode('hex')
     key = 'tikibar-nonce:%s' % nonce
     signer = signing.TimestampSigner()
-    return HttpResponseRedirect('https://%s/tikibar/set-token/?nonce=%s' % (
-        settings.TIKIBAR_SETTINGS.get('api_domain'), signer.sign(key))
+    redirect_url = 'https://%s/tikibar/set-token/?nonce=%s' % (
+        settings.TIKIBAR_SETTINGS.get('api_domain'), signer.sign(key)
     )
+    if request.GET.get('off'):
+        redirect_url += '&off=1'
+    return HttpResponseRedirect(redirect_url)
+
+
+def make_query_bars(metrics_list):
+    query_bars = []
+    for metric in metrics_list:
+        if not metric.duration:
+            continue
+        value = metric.value
+        if metric.props and metric.props.get('needs_format'):
+            value = reformat_sql(value)
+        query_bars.append({
+            'sql': value,
+            'type': metric.type,
+            'timing': {
+                'start': metric.timestamp,
+                'end': metric.timestamp + metric.duration,
+                'duration': (metric.duration) * 1000
+            }
+        })
+    if not len(query_bars):
+        return []
+    query_bars.sort(key=lambda x: x['timing']['start'])
+    first_query_start_ms = query_bars[0]['timing']['start'] * 1000
+    last_query_end_ms = query_bars[-1]['timing']['end'] * 1000
+    wall_clock_time_ms = last_query_end_ms - first_query_start_ms
+    # Annotate bars with the visual styling information we need
+    for query_bar in query_bars:
+        query_bar['bar'] = {}
+        time_before_query_ms = float(
+            query_bar['timing']['start'] * 1000 - first_query_start_ms
+        )
+        query_bar['bar']['left'] = (time_before_query_ms / wall_clock_time_ms) * 99
+        query_bar['bar']['width'] = (query_bar['timing']['duration'] / wall_clock_time_ms) * 99
+        query_bar['color'] = hashlib.md5(smart_bytes(query_bar['sql'])).hexdigest()[:6]
+    return query_bars
+
+
+def tikibar_list_pending(request):
+    tiki_token = get_tiki_token_or_false_for_tikibar_view(request)
+    cache_key = 'tikibar:pending:%s' % tiki_token
+    current_list = cache.get(cache_key) or []
+    html = '<p>Pending requests:</p>'
+    for correlation_id_and_path in current_list:
+        try:
+            correlation_id, path, start = correlation_id_and_path.split(':')
+        except:
+            continue
+        if path.startswith('/tikibar/'):
+            continue
+        how_long_ago = time.time() - float(start)
+        if how_long_ago > 60:
+            continue
+        html += '<p><a href="/tikibar/?should_poll=1&correlation_id=%s&render=1">%s</a> - %s (%.2f seconds ago)</p>' % (
+            correlation_id, correlation_id, path, how_long_ago
+        )
+    return tiki_response(HttpResponse(html))

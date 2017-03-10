@@ -8,7 +8,7 @@
         </tr>
     </thead>
     <tbody>
-        {% for query in tiki.queries %}
+        {% for query in tiki.query_bars %}
         <tr>
             <td>{{ query.timing.duration|floatformat:2 }}<span class="tiki-qualifier">ms</span></td>
             <td class="tiki-sql" style="border-color: #{{ query.color }};">{{ query.sql|safe }}</td>

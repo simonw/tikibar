@@ -59,6 +59,20 @@ class TikibarMiddleware(object):
             request.stime_start = rusage.ru_stime
         # set the request on tikibar's context
         set_current_request(request)
+
+        # Populate 'pending' key
+        from .toolbar_metrics import get_toolbar
+        toolbar = get_toolbar()
+        if toolbar.is_active():
+            tiki_token = get_tiki_token_or_false(request)
+            if tiki_token:
+                cache_key = 'tikibar:pending:%s' % tiki_token
+                current_list = cache.get(cache_key) or []
+                current_list.insert(0, '%s:%s:%s' % (
+                    request.correlation_id, request.path, time.time()
+                ))
+                cache.set(cache_key, current_list)
+
         return None
 
     def process_view(self, request, view_func, view_args, view_kwargs):
