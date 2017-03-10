@@ -751,7 +751,10 @@ html {
         {% if tiki.stack_samples %}
         <a href="#tiki-flame-graph" class="tiki-set tiki-js-toggle">
             <h2 class="tiki-set-header">Flame Graph</h2>
-            <p>{{ tiki.stack_sample_count }} Stacks</p>
+            <p>
+                {{ tiki.stack_sample_count }}
+                <span class="tiki-qualifier">stacks</span>
+            </p>
         </a>
         {% endif %}
 
