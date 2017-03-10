@@ -50,27 +50,6 @@
     {% endfor %}
     </ul>
 
-    <table cellspacing="0">
-        <thead>
-            <tr>
-                <th>Timing</th>
-                <th class="tiki-sql">Query</th>
-                <th class="tiki-timing-graph">Load</th>
-                <th class="tiki-type">Type</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for query in tiki.queries %}
-            <tr>
-                <td>{{ query.timing.duration|floatformat:2 }}<span class="tiki-qualifier">ms</span></td>
-                <td class="tiki-sql" style="border-color: #{{ query.color }};">{{ query.sql|safe }}</td>
-                <td class="tiki-timing-graph">
-                    <div class="tiki-empty-graph" style="width: {{ query.bar.left }}%;"></div>
-                    <div class="tiki-full-graph tiki-{% if query.type == "adb" %}adb{% else %}django{% endif %}" style="width: {{ query.bar.width }}%;"></div>
-                </td>
-                <td class="tiki-type">{{ query.type }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+    {% include "tikibar/_queries.html" %}
+
 </div>
