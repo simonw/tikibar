@@ -96,6 +96,7 @@ class TikibarMiddleware(object):
             toolbar.add_singular_metric('request_path', request.get_full_path())
             if settings.TIKIBAR_SETTINGS.get('enable_profiler'):
                 toolbar.add_stack_samples(request.sampler.output_stats())
+                toolbar.add_singular_metric('stack_sample_count', request.sampler.sample_count())
                 request.sampler.stop()
             toolbar.write_metrics()
             if response.get('content-type', '').startswith('text/html')\

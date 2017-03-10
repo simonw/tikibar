@@ -72,6 +72,9 @@ class Sampler(object):
         lines = ['"{} {}"'.format(frame, count) for frame, count in ordered_stacks]
         return ','.join(lines)
 
+    def sample_count(self):
+        return sum(self._stack_counts.values())
+
     def reset(self):
         self._started = time.time()
         self._stack_counts = collections.defaultdict(int)
