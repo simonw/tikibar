@@ -3,11 +3,11 @@
 <title>Tikibar: {{ tiki.request_path }}</title>
 <script src="https://code.jquery.com/jquery-1.11.1.min.js"></script>
 {% if tiki.stack_samples %}
-    <script src="https://d3js.org/d3.v3.min.js"></script>
-    <script src="https://cdn.rawgit.com/Caged/d3-tip/07cf158c54cf1686b3000d784ef55d27b095cc0e/index.js"></script>
     <script src="https://cdn.jsdelivr.net/lodash/3.10.1/lodash.min.js"></script>
-    <script src="https://cdn.rawgit.com/spiermar/d3-flame-graph/c0e6520683091c6922397e1fb8b7c7a7b6387d49/src/d3.flameGraph.js"></script>
-    <link rel="stylesheet" href="https://cdn.rawgit.com/spiermar/d3-flame-graph/c0e6520683091c6922397e1fb8b7c7a7b6387d49/src/d3.flameGraph.css" />
+    <script src="https://d3js.org/d3.v3.min.js"></script>
+    <script src="https://unpkg.com/d3-tip@0.6.7/index.js"></script>
+    <script src="https://unpkg.com/d3-flame-graph@0.4.2/src/d3.flameGraph.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/d3-flame-graph@0.4.2/src/d3.flameGraph.css" />
     <style type="text/css">
     #tiki-flame-graph-container {
         background: #fff;
