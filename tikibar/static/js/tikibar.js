@@ -17,7 +17,7 @@ jQuery(window).on('load', function() {
     var interval = setInterval(function() {
         if (window.tikibar_host) {
             tikibar_host.send_performance_data();
-            clearInterval(interval);        
+            clearInterval(interval);
         }
     }, 100);
 });
@@ -42,7 +42,7 @@ jQuery(function($) {
         this.container = div[0];
         div.height(60);
         div.find('iframe').height(60); // For mobile safari
-        // We position absolute / zindex the iframe to prevent the box shadow 
+        // We position absolute / zindex the iframe to prevent the box shadow
         // on the autocomplete box in the eventbrite header from overlapping the tikibar
         div.find('iframe').css({
             position: 'absolute',
@@ -68,8 +68,9 @@ jQuery(function($) {
 
         // Listen to fetch() calls too
         var self = this;
+        var original_fetch;
         if (window.fetch && window.Promise) {
-            var original_fetch = window.fetch;
+            original_fetch = window.fetch;
             window.fetch = function(input, init) {
                 return original_fetch(input, init).then(function(response) {
                     var method = (init || {}).method || 'GET';
@@ -151,4 +152,3 @@ jQuery(function($) {
     window.tikibar_host = TikibarHost({attach: document.body});
 
 });
-
