@@ -87,7 +87,8 @@ class TikibarMiddleware(object):
             return response
 
         toolbar = get_toolbar()
-        if toolbar.is_active():
+        # hasattr handles edge case where is_active is false in process_request but true here
+        if toolbar.is_active() and hasattr(request, 'req_start_time'):
             setattr(request, 'req_stop_time', time.time())
             rusage = resource.getrusage(resource.RUSAGE_SELF)
             toolbar.add_singular_metric('total_time', {'d': [request.req_start_time, request.req_stop_time]})
