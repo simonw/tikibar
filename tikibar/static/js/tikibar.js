@@ -66,6 +66,28 @@ jQuery(function($) {
         // Listen to jQuery Ajax calls
         jQuery(document).bind('ajaxComplete', this.on_ajax_request.bind(this));
 
+        // Listen to fetch() calls too
+        var self = this;
+        if (window.fetch && window.Promise) {
+            var original_fetch = window.fetch;
+            window.fetch = function(input, init) {
+                return original_fetch(input, init).then(function(response) {
+                    var method = (init || {}).method || 'GET';
+                    var correlation_id = response.headers.get('x-correlation-id');
+                    var tiki_time = parseFloat(response.headers.get('x-tiki-time') || '0');
+                    self.send_message({
+                        'tiki_msg_type': 'ajax_request',
+                        'url': input,
+                        'verb': method, // GET or POST
+                        'status_code': response.status,
+                        'ms': tiki_time * 1000,
+                        'correlation_id': correlation_id
+                    });
+                    return Promise.resolve(response);
+                });
+            }
+        }
+
     }
 
     TikibarHost.prototype.recieve_message = function(event) {
