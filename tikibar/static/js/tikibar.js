@@ -17,7 +17,7 @@ jQuery(window).on('load', function() {
     var interval = setInterval(function() {
         if (window.tikibar_host) {
             tikibar_host.send_performance_data();
-            clearInterval(interval);        
+            clearInterval(interval);
         }
     }, 100);
 });
@@ -42,7 +42,7 @@ jQuery(function($) {
         this.container = div[0];
         div.height(60);
         div.find('iframe').height(60); // For mobile safari
-        // We position absolute / zindex the iframe to prevent the box shadow 
+        // We position absolute / zindex the iframe to prevent the box shadow
         // on the autocomplete box in the eventbrite header from overlapping the tikibar
         div.find('iframe').css({
             position: 'absolute',
@@ -65,6 +65,29 @@ jQuery(function($) {
 
         // Listen to jQuery Ajax calls
         jQuery(document).bind('ajaxComplete', this.on_ajax_request.bind(this));
+
+        // Listen to fetch() calls too
+        var self = this;
+        var original_fetch;
+        if (window.fetch && window.Promise) {
+            original_fetch = window.fetch;
+            window.fetch = function(input, init) {
+                return original_fetch(input, init).then(function(response) {
+                    var method = (init || {}).method || 'GET';
+                    var correlation_id = response.headers.get('x-correlation-id');
+                    var tiki_time = parseFloat(response.headers.get('x-tiki-time') || '0');
+                    self.send_message({
+                        'tiki_msg_type': 'ajax_request',
+                        'url': input,
+                        'verb': method, // GET or POST
+                        'status_code': response.status,
+                        'ms': tiki_time * 1000,
+                        'correlation_id': correlation_id
+                    });
+                    return Promise.resolve(response);
+                });
+            }
+        }
 
     }
 
@@ -129,4 +152,3 @@ jQuery(function($) {
     window.tikibar_host = TikibarHost({attach: document.body});
 
 });
-
