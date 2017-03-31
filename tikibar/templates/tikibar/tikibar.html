@@ -1,13 +1,17 @@
 <!doctype html>
 <head>
 <title>Tikibar: {{ tiki.request_path }}</title>
-<script src="https://code.jquery.com/jquery-1.11.1.min.js"></script>
+<script src="https://cdn.evbstatic.com/s3-s3/tikibar/jquery-1.11.1.min.js"></script>
 {% if tiki.stack_samples %}
-    <script src="https://cdn.jsdelivr.net/lodash/3.10.1/lodash.min.js"></script>
-    <script src="https://unpkg.com/d3@3.5.17/d3.min.js"></script>
-    <script src="https://unpkg.com/d3-tip@0.6.7/index.js"></script>
-    <script src="https://unpkg.com/d3-flame-graph@0.4.2/src/d3.flameGraph.js"></script>
-    <link rel="stylesheet" href="https://unpkg.com/d3-flame-graph@0.4.2/src/d3.flameGraph.css" />
+    <!--  lodash 3.10.1  -->
+    <script src="https://cdn.evbstatic.com/s3-s3/tikibar/lodash.min.js"></script>
+    <!-- d3 3.5.17  -->
+    <script src="https://cdn.evbstatic.com/s3-s3/tikibar/d3.min.js"></script>
+    <!-- d3-tip 0.6.7  -->
+    <script src="https://cdn.evbstatic.com/s3-s3/tikibar/index.js"></script>
+    <!-- d3-flame-graph 0.4.3  -->
+    <script src="https://cdn.evbstatic.com/s3-s3/tikibar/d3.flameGraph.js"></script>
+    <link rel="stylesheet" href="https://cdn.evbstatic.com/s3-s3/tikibar/d3.flameGraph.css" />
     <style type="text/css">
     #tiki-flame-graph-container {
         background: #fff;
