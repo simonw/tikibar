@@ -68,6 +68,8 @@ class TikibarMiddleware(object):
                     request.utime_start = rusage.ru_utime
                 if not hasattr(request, 'stime_start'):
                     request.stime_start = rusage.ru_stime
+                if not hasattr(request, 'maxrss_start'):
+                    request.maxrss_start = rusage.ru_maxrss
         return None
 
     def process_view(self, request, view_func, view_args, view_kwargs):
@@ -91,9 +93,12 @@ class TikibarMiddleware(object):
         if toolbar.is_active() and hasattr(request, 'req_start_time'):
             setattr(request, 'req_stop_time', time.time())
             rusage = resource.getrusage(resource.RUSAGE_SELF)
+            # convert kB to MB
+            rss_growth = (rusage.ru_maxrss - request.maxrss_start) / 1000
             toolbar.add_singular_metric('total_time', {'d': [request.req_start_time, request.req_stop_time]})
             toolbar.add_singular_metric('user_cpu', {'d': [request.utime_start, rusage.ru_utime]})
             toolbar.add_singular_metric('system_cpu', {'d': [request.stime_start, rusage.ru_stime]})
+            toolbar.add_singular_metric('rss_growth', rss_growth)
             toolbar.add_singular_metric('release', getattr(settings, 'RELEASE', 'master'))
             toolbar.add_singular_metric('request_path', request.get_full_path())
             if settings.TIKIBAR_SETTINGS.get('enable_profiler'):
