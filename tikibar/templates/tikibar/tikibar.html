@@ -771,6 +771,7 @@ html {
         <p>Total server render time: <strong>{{ tiki.total_time.duration|floatformat:0 }}</strong><span class="tiki-qualifier">ms</span></p>
         <p>User CPU: <strong>{{ tiki.user_cpu.duration|floatformat:0 }}</strong><span class="tiki-qualifier">ms</span></p>
         <p>System CPU: <strong>{{ tiki.system_cpu.duration|floatformat:0 }}</strong><span class="tiki-qualifier">ms</span></p>
+        <p>Memory Growth: <strong>{{ tiki.rss_growth|floatformat:0 }}</strong><span class="tiki-qualifier">MB</span></p>
 
         <div class="tiki-traffic">
             <div class="tiki-traffic-wrapper">
