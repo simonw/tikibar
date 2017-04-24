@@ -1,7 +1,39 @@
 <!doctype html>
 <head>
 <title>Tikibar: {{ tiki.request_path }}</title>
-<script src="https://code.jquery.com/jquery-1.11.1.min.js"></script>
+<script src="https://cdn.evbstatic.com/s3-s3/tikibar/jquery-1.11.1.min.js"></script>
+{% if tiki.stack_samples %}
+    <!--  lodash 3.10.1  -->
+    <script src="https://cdn.evbstatic.com/s3-s3/tikibar/lodash.min.js"></script>
+    <!-- d3 3.5.17  -->
+    <script src="https://cdn.evbstatic.com/s3-s3/tikibar/d3.min.js"></script>
+    <!-- d3-tip 0.6.7  -->
+    <script src="https://cdn.evbstatic.com/s3-s3/tikibar/index.js"></script>
+    <!-- d3-flame-graph 0.4.3  -->
+    <script src="https://cdn.evbstatic.com/s3-s3/tikibar/d3.flameGraph.js"></script>
+    <link rel="stylesheet" href="https://cdn.evbstatic.com/s3-s3/tikibar/d3.flameGraph.css" />
+    <style type="text/css">
+    #tiki-flame-graph-container {
+        background: #fff;
+        padding: 10px;
+        border-radius: 5px;
+    }
+    .d3-flame-graph-tip {
+        z-index: 9999;
+    }
+    .controls {
+        text-align: right;
+    }
+    .controls .control-group {
+        margin-left: 10px;
+        display: inline-block;
+    }
+    .controls .control-group input {
+        margin: 5px;
+        padding: 5px;
+    }
+    </style>
+{% endif %}
 <script>
 /*
  * jQuery throttle / debounce - v1.1 - 3/7/2010
@@ -572,6 +604,10 @@ html {
     margin-right: 0.5em;
 }
 
+#tikibar .tiki-sample li {
+    word-wrap: break-word;
+}
+
 #tikibar table {
     color: white;
     width: 100%;
@@ -732,6 +768,16 @@ html {
             <p id="tiki-js-ajax-counter">0</p>
         </a>
 
+        {% if tiki.stack_samples %}
+        <a href="#tiki-flame-graph" class="tiki-set tiki-js-toggle">
+            <h2 class="tiki-set-header">Flame Graph</h2>
+            <p>
+                {{ tiki.stack_sample_count }}
+                <span class="tiki-qualifier">stacks</span>
+            </p>
+        </a>
+        {% endif %}
+
         <a href="#tiki-settings" class="tiki-settings tiki-js-toggle">Settings</a>
     </div>
 
@@ -741,6 +787,7 @@ html {
         <p>Total server render time: <strong>{{ tiki.total_time.duration|floatformat:0 }}</strong><span class="tiki-qualifier">ms</span></p>
         <p>User CPU: <strong>{{ tiki.user_cpu.duration|floatformat:0 }}</strong><span class="tiki-qualifier">ms</span></p>
         <p>System CPU: <strong>{{ tiki.system_cpu.duration|floatformat:0 }}</strong><span class="tiki-qualifier">ms</span></p>
+        <p>Memory Growth: <strong>{{ tiki.rss_growth|floatformat:0 }}</strong><span class="tiki-qualifier">MB</span></p>
 
         <div class="tiki-traffic">
             <div class="tiki-traffic-wrapper">
@@ -800,6 +847,117 @@ html {
         {% endfor %}
         </ul>
     </div><!-- /.tikibasement -->
+
+    {% if tiki.stack_samples %}
+    <div class="tikibasement" id="tiki-flame-graph">
+        <h2>Flame Graph</h2>
+        <div id="tiki-flame-graph-container">
+            <div class="controls">
+                <div class="control-group">
+                    <input id="flame-reset-button" type="button" value="Reset Zoom" />
+                </div>
+                <div class="control-group">
+                    <input id="term" type="text" />
+                    <input id="flame-search-button" type="button" value="Search" />
+                    <input id="flame-clear-button" type="button" value="Clear" />
+                </div>
+            </div>
+            <div id="tiki-flame-graph-chart"></div>
+        </div>
+    </div><!-- /.tikibasement -->
+    <script type="text/javascript">
+
+    // hacky shit
+    {% autoescape off %}
+    var lines = [ {{ tiki.stack_samples }} ];
+    {% endautoescape %}
+
+    // The Node class was taken from here:
+    // https://github.com/spiermar/node-stack-convert
+	function Node(name) {
+		this.name = name;
+		this.value = 0;
+		this.children = {};
+	};
+	Node.prototype.add = function(frames, value) {
+	  this.value += value;
+	  if(frames && frames.length > 0) {
+		var head = frames[0];
+		var child = this.children[head];
+		if(!child) {
+		  child = new Node(head);
+		  this.children[head] = child;
+		}
+		frames.splice(0, 1);
+		child.add(frames, value);
+	  }
+	};
+	Node.prototype.serialize = function() {
+	  var res = {
+		'name': this.name,
+		'value': this.value
+	  }
+
+	  var children = []
+
+	  for(var key in this.children) {
+		children.push(this.children[key].serialize());
+	  }
+
+	  if(children.length > 0) res['children'] = children;
+
+	  return res;
+	}
+
+    var root = new Node('root');
+    lines.map(function (val) {
+        var regex = /(.*) (.*)/g;
+        var matches = regex.exec(val);
+        if (matches)
+            root.add(matches[1].split(";"), parseInt(matches[2]));
+	});
+
+    // Build the flamegraph
+    var flameGraph = d3.flameGraph()
+      .height(540)
+      .width($('#tiki-flame-graph-chart').width())
+      .cellHeight(18)
+      .transitionDuration(750)
+      .transitionEase('cubic-in-out')
+      .sort(true)
+      .title("");
+
+    // Build and setup tooltip
+    var tip = d3.tip()
+      .direction("n")
+      .offset([0, 0])
+      .attr('class', 'd3-flame-graph-tip')
+      .html(function(d) { return "name: " + d.name + ", value: " + d.value; });
+    flameGraph.tooltip(tip);
+
+    d3.select("#tiki-flame-graph-chart")
+        .datum(root.serialize())
+        .call(flameGraph);
+   
+    // Event handlers
+    function flameGraphReset() {
+        flameGraph.resetZoom();
+    }
+    function flameGraphClear(e) {
+        flameGraph.clear(e);
+        $('#term').val('');
+    }
+    function flameGraphSearch() {
+        flameGraph.search($('#term').val());
+    }
+    $(document).ready(function() {
+        $('#flame-reset-button').click(flameGraphReset);
+        $('#flame-clear-button').click(flameGraphClear);
+        $('#flame-search-button').click(flameGraphSearch);
+    });
+
+    </script>
+    {% endif %}
 
     <div class="tikibasement" id="tiki-ajax-requests">
         <h2 id="tiki-ajax-requests-h2" style="display:none">Ajax requests</h2>

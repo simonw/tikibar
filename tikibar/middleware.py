@@ -7,6 +7,7 @@ import uuid
 
 from django.conf import settings
 from django.core.cache import cache
+from sampler import Sampler
 
 from .utils import (
     _should_show_tikibar_for_request,
@@ -50,20 +51,27 @@ class SetCorrelationIDMiddleware(object):
 class TikibarMiddleware(object):
 
     def process_request(self, request):
-        rusage = resource.getrusage(resource.RUSAGE_SELF)
-        if not hasattr(request, 'req_start'):
-            request.req_start = time.time()
-        if not hasattr(request, 'utime_start'):
-            request.utime_start = rusage.ru_utime
-        if not hasattr(request, 'stime_start'):
-            request.stime_start = rusage.ru_stime
+        from .toolbar_metrics import get_toolbar
         # set the request on tikibar's context
         set_current_request(request)
 
-        # Populate 'pending' key
         from .toolbar_metrics import get_toolbar
         toolbar = get_toolbar()
         if toolbar.is_active():
+            if settings.TIKIBAR_SETTINGS.get('enable_profiler'):
+                profile_interval = settings.TIKIBAR_SETTINGS.get('profile_interval', 0.01)
+                request.sampler = Sampler(interval=profile_interval)
+                request.sampler.start()
+            rusage = resource.getrusage(resource.RUSAGE_SELF)
+            if not hasattr(request, 'req_start_time'):
+                request.req_start_time = time.time()
+            if not hasattr(request, 'utime_start'):
+                request.utime_start = rusage.ru_utime
+            if not hasattr(request, 'stime_start'):
+                request.stime_start = rusage.ru_stime
+            if not hasattr(request, 'maxrss_start'):
+                request.maxrss_start = rusage.ru_maxrss
+            # Populate 'pending' key
             tiki_token = get_tiki_token_or_false(request)
             if tiki_token:
                 cache_key = 'tikibar:pending:%s' % tiki_token
@@ -92,14 +100,22 @@ class TikibarMiddleware(object):
             return response
 
         toolbar = get_toolbar()
-        if toolbar.is_active():
-            setattr(request, 'req_stop', time.time())
+        # hasattr handles edge case where is_active is false in process_request but true here
+        if toolbar.is_active() and hasattr(request, 'req_start_time'):
+            setattr(request, 'req_stop_time', time.time())
             rusage = resource.getrusage(resource.RUSAGE_SELF)
-            toolbar.add_singular_metric('total_time', {'d': [request.req_start, request.req_stop]})
+            # convert kB to MB
+            rss_growth = (rusage.ru_maxrss - request.maxrss_start) / 1000
+            toolbar.add_singular_metric('total_time', {'d': [request.req_start_time, request.req_stop_time]})
             toolbar.add_singular_metric('user_cpu', {'d': [request.utime_start, rusage.ru_utime]})
             toolbar.add_singular_metric('system_cpu', {'d': [request.stime_start, rusage.ru_stime]})
+            toolbar.add_singular_metric('rss_growth', rss_growth)
             toolbar.add_singular_metric('release', getattr(settings, 'RELEASE', 'master'))
             toolbar.add_singular_metric('request_path', request.get_full_path())
+            if settings.TIKIBAR_SETTINGS.get('enable_profiler'):
+                toolbar.add_stack_samples(request.sampler.output_stats())
+                toolbar.add_singular_metric('stack_sample_count', request.sampler.sample_count())
+                request.sampler.stop()
             toolbar.write_metrics()
             if response.get('content-type', '').startswith('text/html')\
                     and response.content \
@@ -123,7 +139,7 @@ class TikibarMiddleware(object):
                     )
                     response.content = content
 
-            request_duration = (request.req_stop - request.req_start)
+            request_duration = (request.req_stop_time - request.req_start_time)
             # And add the headers
             response['X-Tiki-Time'] = request_duration
             response['X-Correlation-ID'] = request.correlation_id
@@ -144,7 +160,7 @@ class TikibarMiddleware(object):
                 # JSON blob with metadata about request
                 current_list.append({
                     'd': request_duration,
-                    't': request.req_start,
+                    't': request.req_start_time,
                     'u': request.get_full_path(),
                     'c': request.correlation_id,
                     'v': request.method,

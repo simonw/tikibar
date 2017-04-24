@@ -208,6 +208,9 @@ class ToolbarMetricsContainer(object):
             )
         )
 
+    def add_stack_samples(self, samples):
+        self.metrics['stack_samples'] = samples
+
     def write_metrics(self):
         # If the metrics seem too long, start dropping parts to try and fit
         if len(repr(self.metrics)) > self.max_size:
