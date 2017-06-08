@@ -32,9 +32,9 @@ setup(
     version=version,
     description="""A debugging toolbar for Django""",
     long_description=readme + '\n\n' + history,
-    author='Philip James',
-    author_email='philip@eventbrite.com',
-    url='https://github.com/phildini/tikibar',
+    author='Eventbrite, Inc.',
+    author_email='opensource@eventbrite.com',
+    url='https://github.com/eventbrite/tikibar',
     packages=[
         'tikibar',
     ],
