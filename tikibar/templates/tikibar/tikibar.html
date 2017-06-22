@@ -827,11 +827,27 @@ html {
     <div class="tikibasement" id="tiki-templates">
         <h2>Templates</h2>
         <p>Python view <strong>{{ tiki.view }}</strong> in <a href="{{ tiki.source_control_url }}/blob/{{ tiki.release_hash }}/{{ tiki.view_filepath }}" class="tiki-request">{{ tiki.view_filepath_with_slashes|safe }}</a></p>
-        <ul>
-        {% for template in tiki.templates %}
-            <li class="tiki-request">{{ template.timing.duration|floatformat:2 }}<strong class="tiki-qualifier">ms</strong> <a href="{{ tiki.source_control_url }}/blob/{{ tiki.release_hash }}/{{ template.filepath }}">{{ template.filepath_with_slashes|safe }}</a></li>
-        {% endfor %}
-        </ul>
+        <table cellspacing="0">
+            <thead>
+                <tr>
+                    <th>Timing</th>
+                    <th>Template</th>
+                    <th class="tiki-timing-graph">Load</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for template in tiki.templates %}
+                <tr>
+                    <td>{{ template.timing.duration|floatformat:2 }}<span class="tiki-qualifier">ms</span></td>
+                    <td style="border-color: #{{ template.color }};"><a href="{{ tiki.source_control_url }}/blob/{{ tiki.release_hash }}/{{ template.filepath }}">{{ template.filepath_with_slashes|safe }}</a></td>
+                    <td class="tiki-timing-graph">
+                        <div class="tiki-empty-graph" style="width: {{ template.bar.left }}%;"></div>
+                        <div class="tiki-full-graph" style="width: {{ template.bar.width }}%;"></div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+         </table>
     </div><!-- /.tikibasement -->
 
     <div class="tikibasement" id="tiki-log-lines">
