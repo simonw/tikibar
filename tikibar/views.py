@@ -82,6 +82,7 @@ def tikibar(request):
         data['correlation_id'] = correlation_id
         data['request_history'] = request_history
         data['release_hash'] = data['release'].split('-')[-1]
+        data['bars'] = []
 
         now = time.time()
         for row in data['request_history']:
@@ -102,69 +103,35 @@ def tikibar(request):
 
         total_time = data['total_time']['duration']
 
-        queries = []
-        bars = []
-        total_timing_breakdown = {}
-        other_time = total_time
-        total_query_time = 0.0
-        for metric_type in data.get('queries', {}):
-            metric_timing = 0.0
-            for query_type, val, needs_format, timing in data.get('queries').get(metric_type, []):
-                if needs_format:
-                    val = reformat_sql(val)
-                queries.append({
-                    'sql': val,
-                    'type': query_type,
-                    'timing': timing,
-                })
-                metric_timing += timing['duration']
-            bars.append({
-                'name': metric_type,
-                'ms': metric_timing,
-            })
-            total_timing_breakdown[metric_type] = metric_timing
-            other_time = other_time - metric_timing
-            total_query_time += metric_timing
-        bars.append({
-            'name': 'Other',
-            'ms': other_time
-        })
-
-        queries.sort(key=lambda x: x['timing']['start'])
-        first_query_start_ms = queries[0]['timing']['start'] * 1000
-        last_query_end_ms = queries[-1]['timing']['end'] * 1000
-        wall_clock_time_ms = last_query_end_ms - first_query_start_ms
-        # Next annotate queries with the visual styling information we need
-        for query in queries:
-            query['bar'] = {}
-            time_before_query_ms = float(
-                query['timing']['start'] * 1000 - first_query_start_ms
-            )
-            query['bar']['left'] = (time_before_query_ms / wall_clock_time_ms) * 99
-            query['bar']['width'] = (query['timing']['duration'] / wall_clock_time_ms) * 99
-            query['color'] = hashlib.md5(smart_bytes(query['sql'])).hexdigest()[:6]
-
+        queries, total_query_time = format_queries(
+            data.get('queries', {}),
+            total_time,
+            data['bars']
+        )
         data['queries'] = queries
         data['sum_sql'] = total_query_time
         data['source_control_url'] = settings.TIKIBAR_SETTINGS.get('source_control_url')
         data['splunk_url'] = settings.TIKIBAR_SETTINGS.get('splunk_url')
 
-        # Add funky slashes to the template paths
-        templates = []
-        for template_item in data.get('templates', []):
-            templates.append({
-                'filepath': template_item[0],
-                'timing': template_item[1],
-                'filepath_with_slashes': slasherize(template_item[0]),
-            })
-        templates.sort(key = lambda x: x['timing']['start'])
+        templates = format_templates(
+            data.get('templates', []),
+            total_time,
+            data['bars'],
+        )
         data['templates'] = templates
+        other_time = total_time
+        for bar in data['bars']:
+            other_time -= bar['ms']
+
+        data['bars'].append({
+            'name': 'Other',
+            'ms': other_time
+        })
 
         nextcol = itertools.cycle(TIKI_BAR_COLORS)
-        for bar in bars:
+        for bar in data['bars']:
             bar['color'] = next(nextcol)
             bar['width'] = (bar['ms'] / total_time) * 100
-        data['bars'] = bars
 
         if data.get('view_filepath'):
             data['view_filepath_with_slashes'] = slasherize(data['view_filepath'])
@@ -180,6 +147,69 @@ def tikibar(request):
         return tiki_response(HttpResponse(t.render(template.RequestContext(request, {'tiki': data}))))
     else:
         return tiki_response(HttpResponse(json.dumps(data, indent=2), content_type='application/json'))
+
+
+def format_templates(input_templates, total_time, bars):
+    # Add funky slashes to the template paths
+    templates = []
+    total_template_time = 0.0
+    for (filepath, timing) in input_templates:
+        templates.append({
+            'filepath': filepath,
+            'timing': timing,
+            'filepath_with_slashes': slasherize(filepath),
+        })
+        # Templates are nested, so we want to find the max template render.
+        total_template_time = max(total_template_time, timing['duration'])
+    bars.append({
+        'name': 'Template Rendering',
+        'ms': total_template_time,
+    })
+    templates.sort(key=lambda x: x['timing']['start'])
+
+    add_bars_to_items(templates, unique_keyname='filepath')
+    return templates
+
+
+def format_queries(input_queries, total_time, bars):
+    queries = []
+    total_query_time = 0.0
+    for metric_type in input_queries:
+        metric_timing = 0.0
+        for query_type, val, needs_format, timing in input_queries.get(metric_type, []):
+            if needs_format:
+                val = reformat_sql(val)
+            queries.append({
+                'sql': val,
+                'type': query_type,
+                'timing': timing,
+            })
+            metric_timing += timing['duration']
+        bars.append({
+            'name': metric_type,
+            'ms': metric_timing,
+        })
+        total_query_time += metric_timing
+
+    queries.sort(key=lambda x: x['timing']['start'])
+    add_bars_to_items(queries, unique_keyname='sql')
+    return queries, total_query_time
+
+
+def add_bars_to_items(items, unique_keyname):
+    first_item_start_ms = items[0]['timing']['start'] * 1000
+    last_item_end_ms = items[-1]['timing']['end'] * 1000
+    wall_clock_time_ms = last_item_end_ms - first_item_start_ms
+    # Next annotate items with the visual styling information we need
+    for item in items:
+        item['bar'] = {}
+        time_before_item_ms = float(
+            item['timing']['start'] * 1000 - first_item_start_ms
+        )
+        item['bar']['left'] = (time_before_item_ms / wall_clock_time_ms) * 99
+        item['bar']['width'] = (item['timing']['duration'] / wall_clock_time_ms) * 99
+        item['color'] = hashlib.md5(smart_bytes(item[unique_keyname])).hexdigest()[:6]
+
 
 @ssl_required
 def tikibar_on(request):
