@@ -197,9 +197,13 @@ def format_queries(input_queries, total_time, bars):
 
 
 def add_bars_to_items(items, unique_keyname):
+    if not items:
+        return
+
     first_item_start_ms = items[0]['timing']['start'] * 1000
     last_item_end_ms = items[-1]['timing']['end'] * 1000
     wall_clock_time_ms = last_item_end_ms - first_item_start_ms
+
     # Next annotate items with the visual styling information we need
     for item in items:
         item['bar'] = {}
