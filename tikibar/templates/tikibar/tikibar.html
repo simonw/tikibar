@@ -930,18 +930,28 @@ html {
 	}
 
     var root = new Node('root');
-    lines.map(function (val) {
+    var frames_counts = lines.map(function (val) {
         var regex = /(.*) (.*)/g;
-        var matches = regex.exec(val);
-        if (matches)
-            root.add(matches[1].split(";"), parseInt(matches[2]));
-	});
+        var matches = regex.exec(val);        
+        if (matches) {
+            var frames = matches[1].split(";");
+            var frames_length = frames.length
+            root.add(frames, parseInt(matches[2]));
+            return frames_length;
+        }
+        // Otherwise return 0, as we don't want an undefined
+        return 0;
+    });
+    // The max total count of frames plus the root node
+    var frames_max_count = Math.max.apply(Math, frames_counts) + 1;
+    var cell_height = 18;
+    var component_height = frames_max_count * cell_height;
 
     // Build the flamegraph
     var flameGraph = d3.flameGraph()
-      .height(540)
+      .height(component_height)
       .width($('#tiki-flame-graph-chart').width())
-      .cellHeight(18)
+      .cellHeight(cell_height)
       .transitionDuration(750)
       .transitionEase('cubic-in-out')
       .sort(true)
