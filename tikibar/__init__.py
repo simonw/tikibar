@@ -1,1 +1,1 @@
-__version__ = '0.0.16'
+from tikibar.version import __version__, __version_info__  # noqa

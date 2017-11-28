@@ -1,0 +1,10 @@
+Changelog
+=========
+
+0.0.17 (2017-11-28)
+-------------------
+- Correctly scale the flame graph so it shows all the samples.
+
+0.0.16 (2017-07-07)
+-------------------
+- Bug fixes for endpoints that do not perform queries nor have templates.
