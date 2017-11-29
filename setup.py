@@ -25,7 +25,9 @@ if sys.argv[-1] == 'tag':
     sys.exit()
 
 readme = open('README.rst').read()
-history = open('HISTORY.rst').read().replace('.. :changelog:', '')
+# Replace the title underline '====' from the ReST of the changelog
+# with simple underline '---'
+history = open('CHANGELOG.txt').read().replace('=========', '---------')
 
 setup(
     name='tikibar',
