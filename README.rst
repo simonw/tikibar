@@ -29,3 +29,11 @@ Version Compatibility
 
 Tikibar is currently only tested against Django 1.5, and will likely not work
 against Django 1.11 due to the new middleware format.
+
+
+Release Process
+---------------
+* Bump version in `tikibar/version.py` | `__version_info__ = (x, x, x)`.
+* `git add tikibar/version.py && git commit -am 'Bump tikibar to x.x.x'`
+* `git tag -a x.x.x -m "Bump tikibar to x.x.x"`.
+* `git push origin x.x.x`.
