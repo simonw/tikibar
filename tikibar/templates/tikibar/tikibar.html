@@ -1024,6 +1024,10 @@ html {
 
         <p>Correlation ID: <strong>{{ tiki.correlation_id }}</strong> {% if tiki.splunk_url %}(<a href="{{ tiki.splunk_url }}{{ tiki.correlation_id }}">Splunk logs</a>){% endif %}</p>
 
+        {% if tiki.datadog_trace_id %}
+            <p>Datadog Trace ID: <strong><a href="https://app.datadoghq.com/apm/trace/{{ tiki.datadog_trace_id }}">{{ tiki.datadog_trace_id }}</a></strong></p>
+        {% endif %}
+
         <p>Release: <a href="{{ tiki.source_control_url }}/tree/{{ tiki.release_hash }}">{{ tiki.release }}</a></p>
         <form action="/tikibar/off/" method="post">
             {% csrf_token %}

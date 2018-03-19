@@ -112,6 +112,7 @@ def tikibar(request):
         data['sum_sql'] = total_query_time
         data['source_control_url'] = settings.TIKIBAR_SETTINGS.get('source_control_url')
         data['splunk_url'] = settings.TIKIBAR_SETTINGS.get('splunk_url')
+        data['datadog_trace_id'] = data.get('datadog_trace_id') or None
 
         templates = format_templates(
             data.get('templates', []),

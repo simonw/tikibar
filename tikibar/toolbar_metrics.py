@@ -14,6 +14,12 @@ from .utils import (
     format_dict_as_lines,
 )
 
+# Import datadog, if installed
+try:
+    from ddtrace import tracer
+except ImportError:
+    tracer = None
+
 
 def publish_toolbar_metrics(correlation_id, metrics):
     cache_key = "tikibar:%s" % (correlation_id)
@@ -53,9 +59,16 @@ class ToolbarMetricsContainer(object):
         self.metrics['queries'] = defaultdict(list)
         self.correlation_id = correlation_id
         self._is_active = is_active
+        self.detect_datadog_trace_id()
 
     def is_active(self):
         return self._is_active
+
+    def detect_datadog_trace_id(self):
+        if tracer:
+            span = tracer.current_span()
+            if span:
+                self.metrics['datadog_trace_id'] = span.trace_id
 
     def set_view_callable(self, view_func):
         module = view_func.__module__
