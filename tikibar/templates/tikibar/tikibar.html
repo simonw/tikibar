@@ -932,7 +932,7 @@ html {
     var root = new Node('root');
     var frames_counts = lines.map(function (val) {
         var regex = /(.*) (.*)/g;
-        var matches = regex.exec(val);        
+        var matches = regex.exec(val);
         if (matches) {
             var frames = matches[1].split(";");
             var frames_length = frames.length
@@ -968,7 +968,7 @@ html {
     d3.select("#tiki-flame-graph-chart")
         .datum(root.serialize())
         .call(flameGraph);
-   
+
     // Event handlers
     function flameGraphReset() {
         flameGraph.resetZoom();
@@ -1024,8 +1024,8 @@ html {
 
         <p>Correlation ID: <strong>{{ tiki.correlation_id }}</strong> {% if tiki.splunk_url %}(<a href="{{ tiki.splunk_url }}{{ tiki.correlation_id }}">Splunk logs</a>){% endif %}</p>
 
-        {% if tiki.datadog_trace_id %}
-            <p>Datadog Trace ID: <strong><a href="https://app.datadoghq.com/apm/trace/{{ tiki.datadog_trace_id }}">{{ tiki.datadog_trace_id }}</a></strong></p>
+        {% if tiki.trace_id_datadog %}
+            <p>Datadog Trace ID: <strong><a href="https://app.datadoghq.com/apm/trace/{{ tiki.trace_id_datadog }}">{{ tiki.trace_id_datadog }}</a></strong></p>
         {% endif %}
 
         <p>Release: <a href="{{ tiki.source_control_url }}/tree/{{ tiki.release_hash }}">{{ tiki.release }}</a></p>

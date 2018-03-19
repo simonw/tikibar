@@ -68,7 +68,7 @@ class ToolbarMetricsContainer(object):
         if tracer:
             span = tracer.current_span()
             if span:
-                self.metrics['datadog_trace_id'] = span.trace_id
+                self.metrics['trace_id_datadog'] = span.trace_id
 
     def set_view_callable(self, view_func):
         module = view_func.__module__
