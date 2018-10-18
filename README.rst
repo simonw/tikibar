@@ -47,6 +47,7 @@ Add this to your settings::
     TIKIBAR_SETTINGS = {
         "blacklist": [],
     }
+    ENABLE_TIKIBAR = True
 
 Next, add the following to your URL configuration::
 
