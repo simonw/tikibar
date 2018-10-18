@@ -98,6 +98,7 @@ def tikibar(request):
                 return [expand_durations(item) for item in obj]
             else:
                 return obj
+
         data = expand_durations(data)
 
         total_time = data['total_time']['duration']
@@ -177,8 +178,9 @@ def format_queries(input_queries, total_time, bars):
     for metric_type in input_queries:
         metric_timing = 0.0
         for query_type, val, needs_format, timing in input_queries.get(metric_type, []):
-            if needs_format:
-                val = reformat_sql(val)
+            # TODO: This was throwing an error
+            # if needs_format:
+            #     val = reformat_sql(val)
             queries.append({
                 'sql': val,
                 'type': query_type,

@@ -8,6 +8,7 @@ import uuid
 from django.conf import settings
 from django.core.cache import cache
 from django.utils.deprecation import MiddlewareMixin
+from django.db import connection
 from .sampler import Sampler
 
 from .utils import (
@@ -50,7 +51,23 @@ class SetCorrelationIDMiddleware(MiddlewareMixin):
         return None
 
 
+class TikibarDatabaseWrapper:
+    def __call__(self, execute, sql, params, many, context):
+        from .toolbar_metrics import get_toolbar
+        toolbar = get_toolbar()
+        start = time.time()
+        result = execute(sql, params, many, context)
+        if toolbar.is_active():
+            stop = time.time()
+            toolbar.add_sql_query_metric('SQL', sql, start, stop)
+        return result
+
+
 class TikibarMiddleware(MiddlewareMixin):
+    def __call__(self, request):
+        with connection.execute_wrapper(TikibarDatabaseWrapper()):
+            return super().__call__(request)
+
     def process_request(self, request):
         from .toolbar_metrics import get_toolbar
         # set the request on tikibar's context
