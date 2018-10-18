@@ -7,7 +7,7 @@ import uuid
 
 from django.conf import settings
 from django.core.cache import cache
-from sampler import Sampler
+from .sampler import Sampler
 
 from .utils import (
     _should_show_tikibar_for_request,
@@ -38,7 +38,7 @@ def clear_current_request():
 
     __current_instances.request = None
 
-class SetCorrelationIDMiddleware(object):
+class SetCorrelationIDMiddleware:
     def process_request(self, request):
         # Add a correlation id to the request (needed later)
         request.correlation_id = uuid.uuid1(
@@ -48,7 +48,7 @@ class SetCorrelationIDMiddleware(object):
         return None
 
 
-class TikibarMiddleware(object):
+class TikibarMiddleware:
 
     def process_request(self, request):
         from .toolbar_metrics import get_toolbar

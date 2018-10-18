@@ -42,7 +42,7 @@ def get_toolbar():
     return container
 
 
-class ToolbarMetricsContainer(object):
+class ToolbarMetricsContainer:
 
     # If the metrics are longer than this, they'll be dropped in an
     # attempt to fit into memcached

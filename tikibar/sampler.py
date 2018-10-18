@@ -29,7 +29,7 @@ import collections
 import signal
 import time
 
-class Sampler(object):
+class Sampler:
     """
     A simple stack sampler for low-overhead CPU profiling: samples the call
     stack every `interval` seconds and keeps track of counts by frame. Because
