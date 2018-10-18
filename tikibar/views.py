@@ -90,7 +90,7 @@ def tikibar(request):
 
         # Massage data
         def expand_durations(obj):
-            if isinstance(obj, dict) and list(obj.keys())[0] == 'd':
+            if isinstance(obj, dict) and len(obj.keys()) == 1 and list(obj.keys())[0] == 'd':
                 return duration(obj)
             elif isinstance(obj, dict):
                 return dict([(key, expand_durations(value)) for key, value in obj.items()])

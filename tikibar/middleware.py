@@ -114,7 +114,7 @@ class TikibarMiddleware(MiddlewareMixin):
                 content = response.content
                 content = content.replace(
                     b'</head>', ('<meta name="correlation_id" value="{}"></head>'.format(
-                        request.correlation_id.encode("utf8")
+                        request.correlation_id
                     )).encode("utf8")
                 )
                 # TODO: Figure out a staticfiles implementation that
