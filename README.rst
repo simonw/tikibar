@@ -17,6 +17,17 @@ Among other things, it includes:
 Installation
 ------------
 
+Tikibar is not yet available on PyPI. Instead, you can install from this repo like so::
+
+    pip install https://github.com/simonw/tikibar/archive/master.zip
+
+Or add this line to your ``requirements.txt``::
+
+    https://github.com/simonw/tikibar/archive/master.zip
+
+Configuration
+-------------
+
 First, add tikibar to your installed apps and middleware::
 
     INSTALLED_APPS = (
