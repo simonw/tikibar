@@ -17,7 +17,7 @@ Among other things, it includes:
 Installation
 ------------
 
-First, add tikibar to your installed apps and middleware:
+First, add tikibar to your installed apps and middleware::
 
     INSTALLED_APPS = (
         ...
@@ -35,20 +35,20 @@ The `SetCorrelationIDMiddleware` sets a request.correlation_id property. You can
 use your own middleware for this instead if you already have a correlation ID
 concept implemented.
 
-To enable template logging, switch your template backend to this:
+To enable template logging, switch your template backend to this::
 
     TEMPLATES = [{
         'BACKEND': 'tikibar.template_backend.TikibarDjangoTemplates',
         ...
     }]
 
-Add this to your settings:
+Add this to your settings::
 
     TIKIBAR_SETTINGS = {
         "blacklist": [],
     }
 
-Next, add the following to your URL configuration:
+Next, add the following to your URL configuration::
 
     from django.urls import re_path, include
     import tikibar.views
