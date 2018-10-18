@@ -4,7 +4,6 @@ Tikibar
 A debugging and information toolbar for django, designed for lightweight impact
 so it can be enabled selectively and run in production.
 
-
 Features
 --------
 
@@ -15,27 +14,65 @@ Among other things, it includes:
 * SQL call logging and timing
 * Cross-domain functionality
 
+Installation
+------------
 
-Getting Started
----------------
+First, add tikibar to your installed apps and middleware:
 
-To use Tikibar, you need to add it to your Django ``INSTALLED_APPS`` and then
-include the middleware (``tikibar.middleware.TikibarMiddleware``) in your
-Django middleware configuration.
+    INSTALLED_APPS = (
+        ...
+        'tikibar',
+    )
 
+    MIDDLEWARE = (
+        ...
+        'tikibar.middleware.SetCorrelationIDMiddleware',
+        'tikibar.middleware.TikibarMiddleware',
+        ...
+    )
+
+The `SetCorrelationIDMiddleware` sets a request.correlation_id property. You can
+use your own middleware for this instead if you already have a correlation ID
+concept implemented.
+
+To enable template logging, switch your template backend to this:
+
+    TEMPLATES = [{
+        'BACKEND': 'tikibar.template_backend.TikibarDjangoTemplates',
+        ...
+    }]
+
+Add this to your settings:
+
+    TIKIBAR_SETTINGS = {
+        "blacklist": [],
+    }
+
+Next, add the following to your URL configuration:
+
+    from django.urls import re_path, include
+    import tikibar.views
+
+    tikibar_patterns = [
+        re_path(r'^$', tikibar.views.tikibar),
+        re_path(r'^settings/$', tikibar.views.tikibar_settings),
+        re_path(r'^on/$', tikibar.views.tikibar_on),
+        re_path(r'^set-for-api-domain/$', tikibar.views.tikibar_set_for_api_domain),
+        re_path(r'^off/$', tikibar.views.tikibar_off),
+    ]
+
+    url_patterns = [
+        # Your patterns here
+        re_path(r'^tikibar/', include(tikibar_patterns)),
+    ]
+
+Tikibar uses the Django default cache, so make sure you have configured that to
+something sensible (probably memcached or redis).
+
+To turn on the Tikibar, sign in as a Django staff user and visit `/tikibar/on/`
+- then turn it on.
 
 Version Compatibility
 ---------------------
 
-Tikibar is currently only tested against Django 1.5, and will likely not work
-against Django 1.11 due to the new middleware format.
-
-
-Release Process
----------------
-* Bump version in ``tikibar/version.py`` | ``__version_info__ = (x, x, x)``.
-* ``git add tikibar/version.py``
-* ``git commit -am 'Bump tikibar to x.x.x'``
-* ``git push origin master``
-* ``git tag -a x.x.x -m "Bump tikibar to x.x.x"``
-* ``git push origin x.x.x``
+This branch of tikibar requires Django 2.0 or higher.
