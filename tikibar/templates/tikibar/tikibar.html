@@ -573,11 +573,6 @@ html {
             <p>{{ tiki.loglines|length }}</p>
         </a>
 
-        <a href="#tiki-analytics-actions" class="tiki-set tiki-js-toggle">
-            <h2 class="tiki-set-header">Analytics</h2>
-            <p>{{ tiki.analytics|length }}</p>
-        </a>
-
         <a href="#tiki-ajax-requests" class="tiki-set tiki-js-toggle">
             <h2 class="tiki-set-header">Requests </h2>
             <p id="tiki-js-ajax-counter">0</p>
@@ -681,15 +676,6 @@ html {
         <ul>
         {% for log in tiki.loglines %}
             <li class="tiki-pair"><em>{{ log.0 }}</em> {{ log.1 }}</li>
-        {% endfor %}
-        </ul>
-    </div><!-- /.tikibasement -->
-
-    <div class="tikibasement" id="tiki-analytics-actions">
-        <h2>Analytics Actions</h2>
-        <ul>
-        {% for action in tiki.analytics %}
-            <li class="tiki-pair"><em>{{ action.0 }}</em> {{ action.1 |linebreaks }}</li>
         {% endfor %}
         </ul>
     </div><!-- /.tikibasement -->

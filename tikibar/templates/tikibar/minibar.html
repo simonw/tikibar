@@ -16,10 +16,6 @@
             <h3 class="tiki-set-header">Log lines</h3>
             <p>{{ tiki.loglines|length }}</p>
         </div>
-        <div class="tiki-set">
-            <h3 class="tiki-set-header">Analytics</h3>
-            <p>{{ tiki.analytics|length }}</p>
-        </div>
     </div>
 
     {% if tiki.view or tiki.templates %}
@@ -40,13 +36,6 @@
     <ul>
     {% for log in tiki.loglines %}
         <li class="tiki-pair"><em>{{ log.0 }}</em> {{ log.1 }}</li>
-    {% endfor %}
-    </ul>
-
-    <h2>Analytics Actions</h2>
-    <ul>
-    {% for action in tiki.analytics %}
-        <li class="tiki-pair"><em>{{ action.0 }}</em> {{ action.1 |linebreaks }}</li>
     {% endfor %}
     </ul>
 

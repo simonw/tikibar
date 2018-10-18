@@ -97,34 +97,6 @@ class ToolbarMetricsContainer:
     def add_singular_metric(self, metric_type, data):
         self.metrics[metric_type] = data
 
-    def add_analytics_action_metric(self, data):
-        """Add Analytics data to the toolbar.
-
-        Parameters
-        ----------
-
-        - `data`: dict, should have an `actions` key whose value is a list
-            of length one containing the name of the Analytics action.  Like:
-
-            {u'actions': [u'ActionName'],
-            u'correlation_id': u'00587eca742111e584c50242ac11001b',
-            u'path': u'/',
-            ...
-            }
-
-        """
-
-        action_names = data.get('actions')
-        if action_names and isinstance(action_names, list):
-            action_name = action_names[0]
-        # Format the analytics so they're easy to read in tikibar
-        self.metrics['analytics'].append((
-            action_name,
-            format_dict_as_lines(data),
-        ))
-        # Record a raw form of the data for JSON export
-        self.metrics['analytics_raw'].append({action_name: data})
-
     def add_stack_samples(self, samples):
         self.metrics['stack_samples'] = samples
 
