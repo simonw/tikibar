@@ -7,6 +7,7 @@ import uuid
 
 from django.conf import settings
 from django.core.cache import cache
+from django.utils.deprecation import MiddlewareMixin
 from .sampler import Sampler
 
 from .utils import (
@@ -38,7 +39,8 @@ def clear_current_request():
 
     __current_instances.request = None
 
-class SetCorrelationIDMiddleware:
+
+class SetCorrelationIDMiddleware(MiddlewareMixin):
     def process_request(self, request):
         # Add a correlation id to the request (needed later)
         request.correlation_id = uuid.uuid1(
@@ -48,8 +50,7 @@ class SetCorrelationIDMiddleware:
         return None
 
 
-class TikibarMiddleware:
-
+class TikibarMiddleware(MiddlewareMixin):
     def process_request(self, request):
         from .toolbar_metrics import get_toolbar
         # set the request on tikibar's context
@@ -112,7 +113,9 @@ class TikibarMiddleware:
                     and not getattr(request, 'is_varnish_populating_cache', False):
                 content = response.content
                 content = content.replace(
-                    '</head>', '<meta name="correlation_id" value="%s"></head>' % request.correlation_id
+                    b'</head>', ('<meta name="correlation_id" value="{}"></head>'.format(
+                        request.correlation_id.encode("utf8")
+                    )).encode("utf8")
                 )
                 # TODO: Figure out a staticfiles implementation that
                 # works for this.
@@ -121,10 +124,10 @@ class TikibarMiddleware:
                 )
                 with open(os.path.join(os.path.dirname(__file__), 'static/js/tikibar.js'), 'r') as js:
                     script_str += '<script type="text/javascript" charset="utf-8">{}</script>'.format(
-                            js.read().encode('utf-8')
-                        )
+                        js.read()
+                    )
                     content = content.replace(
-                        '</body>', '%s%s' % (script_str, '</body>')
+                        b'</body>', (script_str + '</body>').encode("utf8")
                     )
                     response.content = content
 
@@ -158,8 +161,7 @@ class TikibarMiddleware:
                 current_list = current_list[-15:]
                 cache.set(cache_key, json.dumps(
                     current_list,
-                    TIKIBAR_DATA_STORAGE_TIMEOUT,
-                ))
+                ), TIKIBAR_DATA_STORAGE_TIMEOUT)
         else:
             if request.is_secure() or settings.DEBUG:
                 if _should_show_tikibar_for_request(request):

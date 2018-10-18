@@ -1,6 +1,7 @@
 from django.core import signing
 from django.http import HttpResponse, HttpResponseRedirect, Http404
 from django import template
+from django.shortcuts import render
 from django.conf import settings
 from django.core.cache import cache
 from django.utils.encoding import smart_bytes
@@ -33,11 +34,9 @@ def tikibar_settings(request):
     if not request.user or not request.user.is_staff:
         raise Http404('Staff required')
     is_active = bool(get_tiki_token_or_false(request))
-    t = template.loader.get_template('tikibar/tikibar_settings.html')
-    return HttpResponse(t.render(template.RequestContext(request, {
-        'is_active': is_active,
-    })))
-
+    return HttpResponse(render(request, 'tikibar/tikibar_settings.html', {
+        "is_active": is_active,
+    }))
 
 @ssl_required
 def tikibar(request):
@@ -91,7 +90,7 @@ def tikibar(request):
 
         # Massage data
         def expand_durations(obj):
-            if isinstance(obj, dict) and obj.keys()[0] == 'd':
+            if isinstance(obj, dict) and list(obj.keys())[0] == 'd':
                 return duration(obj)
             elif isinstance(obj, dict):
                 return dict([(key, expand_durations(value)) for key, value in obj.items()])
@@ -143,8 +142,9 @@ def tikibar(request):
         template_name = 'tikibar.html'
         if request.GET.get('template') == 'minibar':
             template_name = 'minibar.html'
-        t = template.loader.get_template('tikibar/%s' % template_name)
-        return tiki_response(HttpResponse(t.render(template.RequestContext(request, {'tiki': data}))))
+        return tiki_response(HttpResponse(render(request, 'tikibar/%s' % template_name, {
+            'tiki': data
+        })))
     else:
         return tiki_response(HttpResponse(json.dumps(data, indent=2), content_type='application/json'))
 
@@ -226,8 +226,7 @@ def tikibar_on(request):
         set_tikibar_active_on_response(response, request)
         return response
     else:
-        t = template.loader.get_template('tikibar/tikibar_on.html')
-        return HttpResponse(t.render(template.RequestContext(request, {})))
+        return HttpResponse(render(request, 'tikibar/tikibar_on.html'))
 
 @ssl_required
 def tikibar_off(request):
@@ -241,8 +240,7 @@ def tikibar_off(request):
         set_tikibar_disabled_by_user(response)
         return tiki_response(response)
     else:
-        t = template.loader.get_template('tikibar/tikibar_off.html')
-        return tiki_response(HttpResponse(t.render(template.RequestContext(request, {}))))
+        return tiki_response(HttpResponse(render(request, 'tikibar/tikibar_off.html')))
 
 def duration(obj):
     return {
