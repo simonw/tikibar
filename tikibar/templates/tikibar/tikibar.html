@@ -46,166 +46,6 @@
 (function(b,c){var $=b.jQuery||b.Cowboy||(b.Cowboy={}),a;$.throttle=a=function(e,f,j,i){var h,d=0;if(typeof f!=="boolean"){i=j;j=f;f=c}function g(){var o=this,m=+new Date()-d,n=arguments;function l(){d=+new Date();j.apply(o,n)}function k(){h=c}if(i&&!h){l()}h&&clearTimeout(h);if(i===c&&m>e){l()}else{if(f!==true){h=setTimeout(i?k:l,i===c?e-m:e)}}}if($.guid){g.guid=j.guid=j.guid||$.guid++}return g};$.debounce=function(d,e,f){return f===c?a(d,e,false):a(d,f,e!==false)}})(this);
 </script>
 <script>
-
-
-function addClientsideProfiling(timing) {
-    var events = collectClientsidePerformanceData(timing);
-    /*
-    <table cellspacing="0">
-        <thead>
-            <tr>
-                <th>Timing</th>
-                <th class="tiki-sql">Query</th>
-                <th class="tiki-timing-graph">Load</th>
-                <th class="tiki-type">Type</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for query in tiki.queries %}
-            <tr>
-                <td>{{ query.timing.duration|floatformat:2 }}<span class="tiki-qualifier">ms</span></td>
-                <td class="tiki-sql" style="border-color: #{{ query.color }};">{{ query.sql|safe }}</td>
-                <td class="tiki-timing-graph">
-                    <div class="tiki-empty-graph" style="width: {{ query.bar.left }}%;"></div>
-                    <div class="tiki-full-graph tiki-{% if query.type == "adb" %}adb{% else %}django{% endif %}" style="width: {{ query.bar.width }}%;"></div>
-                </td>
-                <td class="tiki-type">{{ query.type }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-     </table>
-    */
-    var table = $('<table cellspacing="0"><thead><tr><th>Start/Duration</th><th>Event</th><th>Load</th></tr></thead><tbody></tbody></table>');
-    var tbody = table.find('tbody:first');
-    jQuery.each(events, function(i, event) {
-        var tr = $('<tr><td></td><td></td><td class="tiki-timing-graph"><div class="tiki-empty-graph"></div><div class="tiki-full-graph"></div></td></tr>');
-        var timing = event.when + 'ms';
-        if (!event.is_point) {
-            timing += ' / ' + event.duration + 'ms';
-        }
-        tr.find('td:first').text(timing);
-        tr.find('td:eq(1)').text(event.name);
-        if (event.subevents.length) {
-            var subevents = (
-                event.subevents[0].name + ': ' + event.subevents[0].when + '<br>' +
-                event.subevents[1].name + ': ' + event.subevents[1].when
-            );
-            var div = $('<div></div>');
-            div.html(subevents);
-            div.css('font-size', '0.7em');
-            div.appendTo(tr.find('td:eq(1)'));
-        }
-        tr.find('.tiki-empty-graph').css('width', '' + Math.min(99, event.left) + '%');
-        tr.find('.tiki-full-graph').css('width', '' + event.width + '%').css('outline', '1px solid white');
-        tbody.append(tr);
-    });
-    table.appendTo(jQuery('#tiki-client-render-table'));
-
-    var page_load_time = timing.domComplete - timing.responseStart;
-    jQuery('.tiki-page-load-time').text(page_load_time);
-    jQuery('.tiki-js-client-render-time').css('display', 'block');
-}
-
-// Client-side performance monitoring
-function collectClientsidePerformanceData(timing) {
-    /*
-    events = [
-        {
-            'name': 'connect',
-            'timestamp': 1401235025450,
-            'when': 3, // ms from earlierst
-            'duration': 33,
-            'is_point': false,
-            'subevents': [
-                {'name': 'connectStart', 'timestamp': 1401235025450, 'when': 33},
-                {'name': 'connectEnd', 'timestamp': 1401235025450, 'when': 45}
-            ]
-        }
-    ]
-    */
-    var events = [];
-    var eventsByName = {};
-    var endEvents = [];
-    // First pass: populate events array, stash endEvents somewhere, skip timestamp=0
-    jQuery.each(timing, function(name, timestamp) {
-        if (!timestamp) {
-            return;
-        }
-        if (/End$/.exec(name)) {
-            endEvents.push({
-                'name': name,
-                'timestamp': timestamp
-            });
-        } else {
-            var event = {
-                'name': name,
-                'timestamp': timestamp,
-                'is_point': true,
-                'subevents': []
-            }
-            eventsByName[name] = event;
-            events.push(event);
-        }
-    });
-
-    // Second pass: populate subevents, duration and is_point fields
-    jQuery.each(endEvents, function(i, event) {
-        var subeventEnd = {
-            'name': event.name,
-            timestamp: event.timestamp
-        };
-        var event = eventsByName[subeventEnd.name.replace('End', 'Start')];
-        // Event name shouldn't end in 'Start'
-        event.subevents = [{
-                'name': event.name,
-                'timestamp': event.timestamp,
-            },
-            subeventEnd
-        ]
-        event.name = event.name.replace('Start', '');
-        event.is_point = false;
-        event.duration = event.subevents[1].timestamp - event.subevents[0].timestamp;
-    });
-
-    // Third pass: sort events by (timestamp, lastSubEventTimestamp), then populate 'when' fields
-    events.sort(function(a, b) {
-        var aTimestamp = a.timestamp;
-        var bTimestamp = b.timestamp;
-        if (aTimestamp == bTimestamp) {
-            var aStamp = (a.is_point ? a.timestamp : a.subevents[1].timestamp);
-            var bStamp = (b.is_point ? b.timestamp : b.subevents[1].timestamp);
-            return aStamp - bStamp;
-        } else {
-            return aTimestamp - bTimestamp;
-        }
-    });
-    var firstTimestamp = events[0].timestamp;
-    jQuery.each(events, function(i, event) {
-        event.when = event.timestamp - firstTimestamp;
-        jQuery.each(event.subevents, function(i, subevent) {
-            subevent.when = subevent.timestamp - firstTimestamp;
-        });
-    });
-
-    // Final pass: populate .left and .width percentage fields
-    var lastEvent = events[events.length - 1];
-    var lastTimestamp = lastEvent.timestamp;
-    if (!lastEvent.is_point) {
-        lastTimestamp = lastEvent.subevents[1].timestamp;
-    }
-    var fullWidth = lastTimestamp - firstTimestamp;
-    jQuery.each(events, function(i, event) {
-        event.left = ((event.timestamp - firstTimestamp) / fullWidth) * 100;
-        if (event.is_point) {
-            event.width = 1
-        } else {
-            event.width = (event.duration / fullWidth) * 100;
-        }
-    });
-
-    return events;
-}
-
 function transmitSize() {
     var height = jQuery('#tikibar').height();
     if (window.parent && window.parent.postMessage) {
@@ -222,10 +62,6 @@ jQuery(function($) {
         if (data && data.tiki_msg_type == 'ajax_request') {
             addAjaxRequest(data.url, data.verb, data.status_code, data.ms, data.correlation_id);
         }
-        if (data && data.tiki_msg_type == 'performance_timing') {
-            addClientsideProfiling(data.timing);
-        }
-
     });;
 
     $(document.body).on('click', 'a', function(e) {
@@ -727,11 +563,6 @@ html {
             <p>{{ tiki.sum_sql|floatformat:2 }}<span class="tiki-qualifier">ms / </span>{{ tiki.queries|length }}</p>
         </a>
 
-        <a href="#tiki-client-render" class="tiki-set tiki-js-toggle tiki-js-client-render-time" style="display:none;">
-            <h2 class="tiki-set-header">Client render time </h2>
-            <p><span class="tiki-page-load-time">0</span><span class="tiki-qualifier">ms</span></p>
-        </a>
-
         <a href="#tiki-templates" class="tiki-set tiki-js-toggle">
             <h2 class="tiki-set-header">Templates</h2>
             <p>{{ tiki.templates|length }}</p>
@@ -817,11 +648,6 @@ html {
             </tbody>
          </table>
 
-    </div><!-- /.tikibasement -->
-
-    <div class="tikibasement" id="tiki-client-render">
-        <h2>Client timing</h2>
-        <div id="tiki-client-render-table"></div>
     </div><!-- /.tikibasement -->
 
     <div class="tikibasement" id="tiki-templates">
@@ -932,7 +758,7 @@ html {
     var root = new Node('root');
     var frames_counts = lines.map(function (val) {
         var regex = /(.*) (.*)/g;
-        var matches = regex.exec(val);        
+        var matches = regex.exec(val);
         if (matches) {
             var frames = matches[1].split(";");
             var frames_length = frames.length
@@ -968,7 +794,7 @@ html {
     d3.select("#tiki-flame-graph-chart")
         .datum(root.serialize())
         .call(flameGraph);
-   
+
     // Event handlers
     function flameGraphReset() {
         flameGraph.resetZoom();
